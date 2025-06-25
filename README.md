@@ -36,15 +36,13 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 
 ## 使用方法
 
-1. ブラウザで `Markdown_Preview.html` を開く
-2. 「📁 フォルダ選択」ボタンをクリック
-3. `.md` ファイルが含まれたローカルフォルダを選択
-
----
-
-## ✅ 完全ローカルでの実行方法
 1. 当リポジトリをZIPでダウンロード
-2. 以下のファイルを同じフォルダに保存  
+2. ブラウザで `Markdown_Preview.html` を開く
+3. 「📁 フォルダ選択」ボタンをクリック
+4. `.md` ファイルが含まれたローカルフォルダを選択
+
+### ✅ 完全ローカルでの実行方法
+1. 以下のファイルを同じフォルダに保存  
    - `Markdown_Preview-main`
      - `LICENSE`
      - `Markdown_Preview.html`
@@ -52,16 +50,16 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
      - `marked.min.js`←CDNからダウンロード
      - `mermaid.min.js`←CDNからダウンロード
      - `github-markdown.css`←CDNからダウンロード
-3. HTML内の `<script>` や `<link>` タグのCDNリンクを相対パスに変更する  
+2. HTML内の `<script>` や `<link>` タグのCDNリンクを相対パスに変更する  
    例：
    ```html
    <script src="./marked.min.js"></script>
    <script src="./mermaid.min.js"></script>
    <link rel="stylesheet" href="./github-markdown.css">
    ```
-4. `Markdown_Preview.html` をWebブラウザで開く
-5. 「📁 フォルダ選択」から `Markdown_Preview.html` を保管しているフォルダを選択
-6. README.mdが問題なく表示されることを確認
+3. `Markdown_Preview.html` をWebブラウザで開く
+4. 「📁 フォルダ選択」から `Markdown_Preview.html` を保管しているフォルダを選択
+5. `README.md`が問題なく表示されることを確認
 
 ---
 
