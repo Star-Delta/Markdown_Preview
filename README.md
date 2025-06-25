@@ -14,12 +14,7 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 - 📁 フォルダ単位でローカルMarkdownファイルを読み込み
 - 📑 セレクトボックスで複数Markdownファイルを切り替え
 - 🔄 ファイル更新を1秒ごとに検出して自動反映
-- 🖼 Markdown中の相対パス画像をローカルから表示
 - 🧠 Mermaid.js コードブロック描画に対応
-  ```mermaid
-  graph TD;
-    図形が表示されたらOK;
-  ```
 - 🌙 ダーク／ライトモード自動切替に対応
 - 🖨 印刷時にUIボタンを非表示
 
@@ -28,9 +23,10 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 ## ❗ 現時点の制限事項・既知の非対応
 - 📌 事前にブラウザが **File System Access API** に対応している必要があります（Chrome/Edge推奨）  
 - 💡 セキュリティ制限により、環境によってはローカルファイルからのJavaScript実行に制限がある場合があります。
-- 現状、リンク周りの動作が怪しいです。
-  - 🔗 **ページ内リンク（`[見出し](#見出し名)`）は未対応です**  
-  - 🔒 すべてのリンクが新しいタブで開きます  
+- 🖼 相対パスで指定された画像は、選択したフォルダ(およびサブフォルダ)以外のフォルダに保管されている画像は表示できません。
+- 🔗現状、リンク周りの動作が怪しいです。
+  -  ページ内リンク（`[見出し](#見出し名)`）は未対応です  
+  -  すべてのリンクが新しいタブで開きます  
 
 ---
 
@@ -43,13 +39,15 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 
 ### ✅ 完全ローカルでの実行方法
 1. 以下のファイルを同じフォルダに保存  
-   - `Markdown_Preview-main`
-     - `LICENSE`
-     - `Markdown_Preview.html`
-     - `README.md`
-     - `marked.min.js`←CDNからダウンロード
-     - `mermaid.min.js`←CDNからダウンロード
-     - `github-markdown.css`←CDNからダウンロード
+   ```plaintext
+   Markdown_Preview-main/
+   ├ LICENSE
+   ├ Markdown_Preview.html
+   ├ README.md
+   ├ marked.min.js              ← CDNからダウンロード
+   ├ mermaid.min.js             ← CDNからダウンロード
+   └ github-markdown.css        ← CDNからダウンロード
+   ```
 2. HTML内の `<script>` や `<link>` タグのCDNリンクを相対パスに変更する  
    例：
    ```html
@@ -60,6 +58,11 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 3. `Markdown_Preview.html` をWebブラウザで開く
 4. 「📁 フォルダ選択」から `Markdown_Preview.html` を保管しているフォルダを選択
 5. `README.md`が問題なく表示されることを確認
+   ```mermaid
+   graph TD;
+     mermaidjs動作チェック;
+     図形が表示されたらOK;
+   ```
 
 ---
 
