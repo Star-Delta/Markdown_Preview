@@ -7,24 +7,16 @@
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   <script>
     mermaid.initialize({ startOnLoad: false }); // Mermaid手動初期化
+
+    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+      mermaid.initialize({ theme: 'dark' });
+    }
   </script>
-  <!-- <link rel="stylesheet" href="style.css"> -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.8.1/github-markdown.css">
   <style>
     body {
       font-family: sans-serif;
       margin: 0;
-    }
-    @media (prefers-color-scheme: light) {
-      body {
-        color-scheme: light;
-        background: #f9f9f9;
-      }
-    }
-    @media (prefers-color-scheme: dark) {
-      body {
-        color-scheme: dark;
-        background: #050505;
-      }
     }
     #open-folder, #file-select, #info-button {
       font-size: 1.2em;
@@ -73,7 +65,6 @@
 </head>
 <body>
   <button id="open-folder" class="Hidden_when_printing">📁 フォルダ選択</button>
-  <!-- <select id="file-select" class="Hidden_when_printing" style="display:none;"></select> -->
   <select id="file-select" class="Hidden_when_printing"></select>
   <button id="info-button" class="Hidden_when_printing" title="このツールについて">ℹ️</button>
 
@@ -85,11 +76,10 @@
     <div class="info-content">
       <span id="info-close">&times;</span>
       <p>
-        このツールはローカルMarkdownファイルをプレビューするWebアプリです。<br>
-        使い方やライセンスは
-        <a href="README.md">README</a> をご参照ください。<br>
-        開発者: <a href="https://github.com/Star-Delta">Star-Delta</a><br>
-        ライセンス: <a href="LICENSE">MIT License</a>
+        GitHub: <a href="https://github.com/Star-Delta/Markdown_Preview" target="_blank" rel="noopener noreferrer">Markdown_Preview</a><br>
+        使い方: <a href="https://github.com/Star-Delta/Markdown_Preview/blob/main/README.md" target="_blank" rel="noopener noreferrer">README</a> をご参照ください。<br>
+        ライセンス: <a href="https://github.com/Star-Delta/Markdown_Preview/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a><br>
+        開発者: <a href="https://github.com/Star-Delta" target="_blank" rel="noopener noreferrer">Star-Delta</a><br>
       </p>
     </div>
   </div>
@@ -146,7 +136,7 @@
       });
 
       // Mermaid描画を実行
-      mermaid.init(undefined, preview.querySelectorAll('.mermaid'));
+      mermaid.run(undefined, preview.querySelectorAll('.mermaid'));
     }
 
     async function updatePreviewIfChanged() {
@@ -182,7 +172,6 @@
           opt.textContent = path;
           fileSelect.appendChild(opt);
         });
-        // fileSelect.style.display = 'inline';
 
         const basePath = mdFiles[0].path.split('/').slice(0, -1).join('/');
         fileMap.clear();
