@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Markdown_Preview</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <script>
+    mermaid.initialize({ startOnLoad: false }); // Mermaid手動初期化
+  </script>
+  <link rel="stylesheet" href="https://star-delta.github.io/CSS/Markdown.css">
+  <style>
+    body {
+      font-family: sans-serif;
+      margin: 0;
+    }
+    @media (prefers-color-scheme: light) {
+      body {
+        color-scheme: light;
+        background: #f9f9f9;
+      }
+    }
+    @media (prefers-color-scheme: dark) {
+      body {
+        color-scheme: dark;
+        background: #050505;
+      }
+    }
+    #open-folder, #file-select, #info-button {
+      font-size: 1.2em;
+      margin: 0.2em;
+      padding: 0.2em;
+      cursor: pointer;
+    }
+    #info-button {
+      position: fixed;
+      top: 0.2em;
+      right: 0.2em;
+      z-index: 1001;
+    }
+    #info-close {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+    .info-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.4);
+    }
+    .info-content {
+      background: white;
+      margin: 10% auto;
+      padding: 1em 2em;
+      border-radius: 8px;
+      width: fit-content;
+      max-width: 90%;
+      font-size: 0.95em;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      position: relative;
+    }
+    @media print {
+      .Hidden_when_printing {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <button id="open-folder" class="Hidden_when_printing">📁 フォルダ選択</button>
+  <!-- <select id="file-select" class="Hidden_when_printing" style="display:none;"></select> -->
+  <select id="file-select" class="Hidden_when_printing"></select>
+  <button id="info-button" class="Hidden_when_printing" title="このツールについて">ℹ️</button>
+
+  <div id="preview" class="markdown-body">
+    <p><em>ここにMarkdownのプレビューが表示されます</em></p>
+  </div>
+
+  <div id="info-modal" class="info-modal Hidden_when_printing">
+    <div class="info-content">
+      <span id="info-close">&times;</span>
+      <p>
+        このツールはローカルMarkdownファイルをプレビューするWebアプリです。<br>
+        使い方やライセンスは
+        <a href="README.md">README</a> をご参照ください。<br>
+        開発者: <a href="https://github.com/Star-Delta">Star-Delta</a><br>
+        ライセンス: <a href="LICENSE">MIT License</a>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    const openFolderBtn = document.getElementById('open-folder');
+    const fileSelect = document.getElementById('file-select');
+    const preview = document.getElementById('preview');
+
+    let mdHandle = null;
+    let fileMap = new Map();
+    let lastModified = 0;
+
+    async function getFilesRecursively(dirHandle, path = '') {
+      const files = [];
+      for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'file') {
+          files.push({ handle: entry, path: path + entry.name });
+        } else if (entry.kind === 'directory') {
+          const nested = await getFilesRecursively(entry, path + entry.name + '/');
+          files.push(...nested);
+        }
+      }
+      return files;
+    }
+
+    async function renderMarkdown(text) {
+      const tokens = marked.lexer(text);
+
+      function rewriteImageTokens(tokens) {
+        for (const token of tokens) {
+          if (token.type === 'image' && token.href) {
+            const file = fileMap.get(decodeURIComponent(token.href));
+            token.href = file ? URL.createObjectURL(file) : '';
+          }
+          if (token.tokens) rewriteImageTokens(token.tokens);
+        }
+      }
+
+      rewriteImageTokens(tokens);
+      let html = marked.parser(tokens);
+
+      // Mermaidコードブロックを<div class="mermaid">に置き換える
+      html = html.replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g, (_, code) => {
+        return `<div class="mermaid">${code}</div>`;
+      });
+
+      preview.innerHTML = html;
+
+      // 外部リンクはすべて新しいタブ＋セキュリティ対策
+      document.querySelectorAll('a[href]').forEach(link => {
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+      });
+
+      // Mermaid描画を実行
+      mermaid.init(undefined, preview.querySelectorAll('.mermaid'));
+    }
+
+    async function updatePreviewIfChanged() {
+      if (!mdHandle) return;
+      try {
+        const file = await mdHandle.getFile();
+        if (file.lastModified !== lastModified) {
+          lastModified = file.lastModified;
+          const text = await file.text();
+          await renderMarkdown(text);
+        }
+      } catch (err) {
+        console.error('更新失敗:', err);
+      }
+    }
+
+    openFolderBtn.addEventListener('click', async () => {
+      if (!window.showDirectoryPicker) {
+        alert('このブラウザは File System Access API に対応していません。');
+        return;
+      }
+
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        const entries = await getFilesRecursively(dirHandle);
+        const mdFiles = entries.filter(e => e.path.endsWith('.md'));
+        if (mdFiles.length === 0) return alert('.md ファイルが見つかりません。');
+
+        fileSelect.innerHTML = '';
+        mdFiles.forEach(({ path }, i) => {
+          const opt = document.createElement('option');
+          opt.value = i;
+          opt.textContent = path;
+          fileSelect.appendChild(opt);
+        });
+        // fileSelect.style.display = 'inline';
+
+        const basePath = mdFiles[0].path.split('/').slice(0, -1).join('/');
+        fileMap.clear();
+        for (const { handle, path } of entries) {
+          const relPath = path.replace(basePath + '/', '');
+          const file = await handle.getFile();
+          fileMap.set(relPath, file);
+        }
+
+        mdHandle = mdFiles[0].handle;
+        lastModified = 0;
+        await updatePreviewIfChanged();
+
+        fileSelect.onchange = async () => {
+          const selected = mdFiles[parseInt(fileSelect.value)];
+          mdHandle = selected.handle;
+          lastModified = 0;
+          await updatePreviewIfChanged();
+        };
+      } catch (err) {
+        console.error(err);
+        alert('フォルダの読み込みに失敗しました。');
+      }
+    });
+
+    setInterval(updatePreviewIfChanged, 1000);
+
+    document.getElementById('info-button').onclick = () => {
+      document.getElementById('info-modal').style.display = 'block';
+    };
+    document.getElementById('info-close').onclick = () => {
+      document.getElementById('info-modal').style.display = 'none';
+    };
+    window.onclick = (e) => {
+      if (e.target === document.getElementById('info-modal')) {
+        document.getElementById('info-modal').style.display = 'none';
+      }
+    };
+  </script>
+</body>
+</html>
