@@ -161,6 +161,7 @@
 
       try {
         const dirHandle = await window.showDirectoryPicker();
+        openFolderBtn.textContent = `📁 ${dirHandle.name}`;
         const entries = await getFilesRecursively(dirHandle);
         const mdFiles = entries.filter(e => e.path.endsWith('.md'));
         if (mdFiles.length === 0) return alert('.md ファイルが見つかりません。');
