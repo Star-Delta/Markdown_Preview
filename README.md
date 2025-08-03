@@ -10,13 +10,11 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 ---
 
 ## 主な機能
-
 - 📁 フォルダ単位でローカルMarkdownファイルを読み込み
 - 📑 セレクトボックスで複数Markdownファイルを切り替え
 - 🔄 ファイル更新を1秒ごとに検出して自動反映
 - 🧠 Mermaid.js コードブロック描画に対応
-- 🌙 ダーク／ライトモード自動切替に対応
-- 🖨 印刷時にUIボタンを非表示
+- 📐 LaTeX形式で数式を記述可能（KaTeX対応）
 
 ---
 
@@ -44,23 +42,35 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
    ├ README.md
    ├ marked.min.js              ← CDNからダウンロード
    ├ mermaid.min.js             ← CDNからダウンロード
-   └ github-markdown.css        ← CDNからダウンロード
+   ├ katex.min.js               ← CDNからダウンロード
+   ├ auto-render.min.js         ← CDNからダウンロード
+   └ katex.min.css              ← CDNからダウンロード
    ```
 2. HTML内の `<script>` や `<link>` タグのCDNリンクを相対パスに変更する  
    例：
    ```html
    <script src="./marked.min.js"></script>
    <script src="./mermaid.min.js"></script>
+   <script src="./katex.min.js"></script>
+   <script src="./auto-render.min.js"></script>
    <link rel="stylesheet" href="./github-markdown.css">
+   <link rel="stylesheet" href="./katex.min.css">
    ```
 3. `Markdown_Preview.html` をWebブラウザで開く
 4. 「📁 フォルダ選択」から `Markdown_Preview.html` を保管しているフォルダを選択
 5. `README.md`が問題なく表示されることを確認
-   ```mermaid
-   graph TD;
-     mermaidjs動作チェック;
-     図形が表示されたらOK;
-   ```
+   * MermaidJSの動作確認
+     ```mermaid
+     graph TD;
+       mermaidjs動作チェック;
+       図形が表示されたらOK;
+     ```
+   * KaTeX
+     * InLine:\\( 1 = 1 \\)
+     * Block
+       $$
+       1 = 1
+       $$
 
 ---
 
@@ -71,6 +81,7 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 | Markdown変換 | [`marked.js`](https://marked.js.org/)                                  |
 | Mermaid描画  | [`mermaid.js`](https://mermaid.js.org/)                                |
 | 外部スタイル | [`github-markdown.css`](https://sindresorhus.com/github-markdown-css/) |
+| 数式描画     | [`KaTeX`](https://katex.org/)                                                  |
 
 ---
 

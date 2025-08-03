@@ -62,6 +62,12 @@
       }
     }
   </style>
+<!-- KaTeX -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"
+        onload="renderMathInElement(document.body);"></script>
+
 </head>
 <body>
   <button id="open-folder" class="Hidden_when_printing">📁 フォルダ選択</button>
@@ -129,6 +135,16 @@
       });
 
       preview.innerHTML = html;
+      // 数式描画（KaTeX）
+      renderMathInElement(preview, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true}
+        ],
+        throwOnError: false
+      });
+
 
       // 外部リンクはすべて新しいタブ＋セキュリティ対策
       document.querySelectorAll('a[href]').forEach(link => {
