@@ -1,27 +1,31 @@
 # Markdown_Preview
 
-Webブラウザ上でローカルのMarkdownファイル（`.md`）をプレビューするツールです。  
+Webブラウザ上でローカルのMarkdownファイル（`.md`、`.markdown`）をプレビューするツールです。  
 AIを利用したコーディングの検証を兼ねて個人用に作成したものなので、粗が目立つ点についてはご了承ください。  
 
-## 🔗 公開ページ
+## 🔗 リポジトリ
 
 👉 [Markdown_Preview](https://github.com/Star-Delta/Markdown_Preview)  
 
 ---
 
 ## 主な機能
-- 📁 フォルダ単位でローカルMarkdownファイルを読み込み
+- 📁 選択したフォルダとサブフォルダ内のMarkdownファイルを読み込み
 - 📑 セレクトボックスで複数Markdownファイルを切り替え
 - 🔄 ファイル更新を1秒ごとに検出して自動反映
 - 🧠 Mermaid.js コードブロック描画に対応
-- 📐 LaTeX形式で数式を記述可能（KaTeX対応）
+- 📐 KaTeXによるインライン数式・ブロック数式の描画に対応
+- 🌙 OSやブラウザの設定に応じたダークモード表示
+- 🖨 印刷時に操作欄を自動的に非表示
 
 ---
 
 ## ❗ 現時点の制限事項・既知の非対応
-- 📌 事前にブラウザが **File System Access API** に対応している必要があります（Chrome/Edge推奨）  
+- 🔒 Markdown内のHTMLはそのまま描画される場合があり、悪意のあるコードが実行される可能性があります。**信頼できないMarkdownファイルは開かないでください。**
+- 📌 事前にブラウザが File System Access API に対応している必要があります（Chrome/Edge推奨）  
 - 💡 セキュリティ制限により、環境によってはローカルファイルからのJavaScript実行に制限がある場合があります。
-- 🖼 相対パスで指定された画像は、選択したフォルダ(およびサブフォルダ)以外のフォルダに保管されている画像は表示できません。
+- 🌐 外部ライブラリをCDNから読み込むため、利用時にはインターネット接続が必要です。
+- 🖼 Markdown内の画像表示は試験的な対応であり、ファイルの配置や指定方法によっては正しく表示されない場合があります。
 - 🔗アンカーリンクに対応していません。
 
 ---
@@ -31,64 +35,11 @@ AIを利用したコーディングの検証を兼ねて個人用に作成した
 1. 当リポジトリをZIPでダウンロード
 2. ブラウザで `Markdown_Preview.html` を開く
 3. 「📁 フォルダ選択」ボタンをクリック
-4. `.md` ファイルが含まれたローカルフォルダを選択
-
-### ✅ 完全ローカルでの実行方法
-1. 以下のファイルを同じフォルダに保存  
-   ```plaintext
-   Markdown_Preview-main/
-   ├ LICENSE
-   ├ Markdown_Preview.html
-   ├ README.md
-   ├ marked.min.js              ← CDNからダウンロード
-   ├ mermaid.min.js             ← CDNからダウンロード
-   ├ katex.min.js               ← CDNからダウンロード
-   ├ auto-render.min.js         ← CDNからダウンロード
-   └ katex.min.css              ← CDNからダウンロード
-   ```
-2. HTML内の `<script>` や `<link>` タグのCDNリンクを相対パスに変更する  
-   例：
-   ```html
-   <script src="./marked.min.js"></script>
-   <script src="./mermaid.min.js"></script>
-   <script src="./katex.min.js"></script>
-   <script src="./auto-render.min.js"></script>
-   <link rel="stylesheet" href="./github-markdown.css">
-   <link rel="stylesheet" href="./katex.min.css">
-   ```
-3. `Markdown_Preview.html` をWebブラウザで開く
-4. 「📁 フォルダ選択」から `Markdown_Preview.html` を保管しているフォルダを選択
-5. `README.md`が問題なく表示されることを確認
-   * MermaidJSの動作確認
-     ```mermaid
-     graph TD;
-       mermaidjs動作チェック;
-       図形が表示されたらOK;
-     ```
-   * KaTeX
-     * InLine:\\( 1 = 1 \\)
-     * Block
-       $$
-       1 = 1
-       $$
-
----
-
-## 使用技術
-
-| 項目         | 内容                                                                   |
-| ------------ | ---------------------------------------------------------------------- |
-| Markdown変換 | [`marked.js`](https://marked.js.org/)                                  |
-| Mermaid描画  | [`mermaid.js`](https://mermaid.js.org/)                                |
-| 外部スタイル | [`github-markdown.css`](https://sindresorhus.com/github-markdown-css/) |
-| 数式描画     | [`KaTeX`](https://katex.org/)                                                  |
-
----
+4. `.md` または `.markdown` ファイルが含まれたローカルフォルダを選択
 
 ## ライセンス
 
-このプロジェクトは [MITライセンス](./LICENSE) の下で提供されています。  
-自由にご利用・改変・再配布可能ですが、著作権表記とライセンス文の保持が必要です。
+このプロジェクトは [Mozilla Public License 2.0](./LICENSE) の下で提供されています。
 
 ---
 
