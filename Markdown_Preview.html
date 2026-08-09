@@ -3,20 +3,42 @@
 <head>
   <meta charset="UTF-8" />
   <title>Markdown_Preview</title>
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-  <script>
-    mermaid.initialize({ startOnLoad: false }); // Mermaid手動初期化
 
+  <!-- Markdownの変換とMermaid図の描画に使用する外部ライブラリ -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@18.0.7/lib/marked.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"></script>
+  <script>
+    // Markdownを描画した後にmermaid.run()を呼ぶため、自動描画は無効にする。
+    mermaid.initialize({ startOnLoad: false });
+
+    // OS／ブラウザがダークモードなら、図にもMermaidのダークテーマを適用する。
     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
       mermaid.initialize({ theme: 'dark' });
     }
   </script>
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.8.1/github-markdown.css">
+
+  <!-- Markdown用CSSの読み込み -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Star-Delta/Markdown-CSS@0/Markdown.css">
   <style>
+    /* 操作欄と情報モーダルのレイアウト */
     body {
       font-family: sans-serif;
       margin: 0;
+    }
+    #file-controls {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      background: Canvas;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+    }
+    @media (prefers-color-scheme: dark) {
+      #file-controls {
+        color-scheme: dark;
+        color: #f0f6fc;
+        background: #0d1117;
+        border-bottom-color: #30363d;
+      }
     }
     #open-folder, #file-select, #info-button {
       font-size: 1.2em;
@@ -56,50 +78,85 @@
       box-shadow: 0 0 10px rgba(0,0,0,0.3);
       position: relative;
     }
+    @media (prefers-color-scheme: dark) {
+      .info-content {
+        color-scheme: dark;
+        color: #f0f6fc;
+        background: #161b22;
+        border: 1px solid #30363d;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+      }
+      .info-content a {
+        color: #58a6ff;
+      }
+      #info-close {
+        color: #f0f6fc;
+      }
+    }
+
+    /* 印刷時は操作ボタンやモーダルを出力しない */
     @media print {
       .Hidden_when_printing {
         display: none;
       }
     }
   </style>
-<!-- KaTeX -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css">
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js"></script>
-<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"
-        onload="renderMathInElement(document.body);"></script>
+
+  <!-- Markdown内の数式を描画するKaTeXと自動レンダリング拡張 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"
+          onload="renderMathInElement(document.body);"></script>
 
 </head>
 <body>
-  <button id="open-folder" class="Hidden_when_printing">📁 フォルダ選択</button>
-  /
-  <select id="file-select" class="Hidden_when_printing"></select>
-  <button id="info-button" class="Hidden_when_printing" title="このツールについて">ℹ️</button>
+  <!-- ファイル操作欄（Hidden_when_printingは印刷対象外にするためのクラス） -->
+  <div id="file-controls" class="Hidden_when_printing">
+    <button id="open-folder">📁 フォルダ選択</button>
+    /
+    <select id="file-select"></select>
+    <button id="info-button" title="このツールについて">ℹ️</button>
+  </div>
 
   <div id="preview" class="markdown-body">
     <p><em>ここにMarkdownのプレビューが表示されます</em></p>
   </div>
 
+  <!-- ツール情報を表示するモーダル。通常はCSSで非表示にしている -->
   <div id="info-modal" class="info-modal Hidden_when_printing">
     <div class="info-content">
       <span id="info-close">&times;</span>
       <p>
-        GitHub: <a href="https://github.com/Star-Delta/Markdown_Preview" target="_blank" rel="noopener noreferrer">Markdown_Preview</a><br>
-        使い方: <a href="https://github.com/Star-Delta/Markdown_Preview/blob/main/README.md" target="_blank" rel="noopener noreferrer">README</a> をご参照ください。<br>
-        ライセンス: <a href="https://github.com/Star-Delta/Markdown_Preview/blob/main/LICENSE" target="_blank" rel="noopener noreferrer">MIT License</a><br>
-        開発者: <a href="https://github.com/Star-Delta" target="_blank" rel="noopener noreferrer">Star-Delta</a><br>
+        <a href="https://github.com/Star-Delta/Markdown_Preview" target="_blank" rel="noopener noreferrer">Markdown_Preview</a>(開発者: <a href="https://github.com/Star-Delta" target="_blank" rel="noopener noreferrer">Star-Delta</a>)<br>
+        <a href="README.md" target="_blank" rel="noopener noreferrer">使い方</a>/<a href="LICENSE" target="_blank" rel="noopener noreferrer">ライセンス</a><br>
       </p>
     </div>
   </div>
 
   <script>
+    // 頻繁に参照する画面要素を保持する。
     const openFolderBtn = document.getElementById('open-folder');
     const fileSelect = document.getElementById('file-select');
     const preview = document.getElementById('preview');
 
-    let mdHandle = null;
-    let fileMap = new Map();
-    let lastModified = 0;
+    let mdHandle = null;       // 現在プレビューしているMarkdownファイルのハンドル
+    let fileMap = new Map();   // Markdownから参照する画像等の相対パスとFileの対応表
+    let lastModified = 0;      // 最後に描画したファイルの更新日時（不要な再描画を防ぐ）
 
+    // mermaidコードブロックは、Mermaidが認識する専用要素として直接出力する。
+    marked.use({
+      renderer: {
+        code({ text, lang }) {
+          if (lang?.trim().toLowerCase() !== 'mermaid') return false;
+          return `<pre class="mermaid">${text}</pre>`;
+        }
+      }
+    });
+
+    /**
+     * 選択されたフォルダ以下を再帰的に走査し、全ファイルを収集する。
+     * pathは選択フォルダを基準とした相対パスとして引き継ぐ。
+     */
     async function getFilesRecursively(dirHandle, path = '') {
       const files = [];
       for await (const entry of dirHandle.values()) {
@@ -113,32 +170,34 @@
       return files;
     }
 
+    /** Markdown文字列をHTMLへ変換し、画像・数式・Mermaid図を描画する。 */
     async function renderMarkdown(text) {
+      // HTMLへ変換する前のトークン段階で画像URLを書き換える。
       const tokens = marked.lexer(text);
 
+      /** 入れ子のトークンも含め、ローカル画像の参照先をBlob URLへ変換する。 */
       function rewriteImageTokens(tokens) {
         for (const token of tokens) {
           if (token.type === 'image' && token.href) {
+            // URLエンコードされたファイル名（例: %20）も実際のパスへ戻して検索する。
             const file = fileMap.get(decodeURIComponent(token.href));
             token.href = file ? URL.createObjectURL(file) : '';
           }
+          // 強調やリンクなどの内部に画像がある場合に備えて再帰的に処理する。
           if (token.tokens) rewriteImageTokens(token.tokens);
         }
       }
 
       rewriteImageTokens(tokens);
-      let html = marked.parser(tokens);
-
-      // Mermaidコードブロックを<div class="mermaid">に置き換える
-      html = html.replace(/<pre><code class="language-mermaid">([\s\S]*?)<\/code><\/pre>/g, (_, code) => {
-        return `<div class="mermaid">${code}</div>`;
-      });
+      const html = marked.parser(tokens);
 
       preview.innerHTML = html;
-      // 数式描画（KaTeX）
+
+      // 生成したプレビュー領域だけを対象にKaTeXで数式を描画する。
       renderMathInElement(preview, {
         delimiters: [
           {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
           {left: "\\(", right: "\\)", display: false},
           {left: "\\[", right: "\\]", display: true}
         ],
@@ -146,16 +205,22 @@
       });
 
 
-      // 外部リンクはすべて新しいタブ＋セキュリティ対策
+      // リンクは新しいタブで開き、遷移先から元画面を操作できないようにする。
       document.querySelectorAll('a[href]').forEach(link => {
         link.setAttribute('target', '_blank');
         link.setAttribute('rel', 'noopener noreferrer');
       });
 
-      // Mermaid描画を実行
-      mermaid.run(undefined, preview.querySelectorAll('.mermaid'));
+      // HTMLへの挿入が済んだ後でMermaid図を描画する。
+      await mermaid.run({
+        nodes: preview.querySelectorAll('.mermaid')
+      });
     }
 
+    /**
+     * 選択中ファイルの更新日時を確認し、変更された場合だけ再描画する。
+     * setIntervalからも呼ばれるため、読み取り失敗は画面を止めずログへ記録する。
+     */
     async function updatePreviewIfChanged() {
       if (!mdHandle) return;
       try {
@@ -170,7 +235,9 @@
       }
     }
 
+    // フォルダを選択し、Markdown一覧とローカルファイルの対応表を作成する。
     openFolderBtn.addEventListener('click', async () => {
+      // File System Access APIは対応ブラウザでのみ利用できる。
       if (!window.showDirectoryPicker) {
         alert('このブラウザは File System Access API に対応していません。');
         return;
@@ -179,11 +246,14 @@
       try {
         const dirHandle = await window.showDirectoryPicker();
         openFolderBtn.textContent = `📁 ${dirHandle.name}`;
+
+        // サブフォルダを含む全ファイルから、選択候補となるMarkdownだけを抽出する。
         const entries = await getFilesRecursively(dirHandle);
-        const mdFiles = entries.filter(e => e.path.endsWith('.md'));
-        if (mdFiles.length === 0) return alert('.md ファイルが見つかりません。');
+        const mdFiles = entries.filter(e => /\.(md|markdown)$/i.test(e.path));
+        if (mdFiles.length === 0) return alert('.md または .markdown ファイルが見つかりません。');
 
         fileSelect.innerHTML = '';
+        // プルダウンの値にはmdFiles配列の添字を使用する。
         mdFiles.forEach(({ path }, i) => {
           const opt = document.createElement('option');
           opt.value = i;
@@ -191,6 +261,7 @@
           fileSelect.appendChild(opt);
         });
 
+        // 最初のMarkdownがあるフォルダを基準に、画像等の相対パスを解決する。
         const basePath = mdFiles[0].path.split('/').slice(0, -1).join('/');
         fileMap.clear();
         for (const { handle, path } of entries) {
@@ -199,10 +270,12 @@
           fileMap.set(relPath, file);
         }
 
+        // 初期表示は一覧の先頭にあるMarkdownとする。
         mdHandle = mdFiles[0].handle;
         lastModified = 0;
         await updatePreviewIfChanged();
 
+        // 選択が変わったら監視対象を差し替え、更新日時をリセットして即時描画する。
         fileSelect.onchange = async () => {
           const selected = mdFiles[parseInt(fileSelect.value)];
           mdHandle = selected.handle;
@@ -215,8 +288,10 @@
       }
     });
 
+    // 外部エディタでの保存を検知するため、1秒ごとに更新日時を確認する。
     setInterval(updatePreviewIfChanged, 1000);
 
+    // 情報モーダルを開閉する。背景部分のクリックでも閉じられる。
     document.getElementById('info-button').onclick = () => {
       document.getElementById('info-modal').style.display = 'block';
     };
