@@ -6,15 +6,15 @@
 
   <!-- Markdownの変換とMermaid図の描画に使用する外部ライブラリ -->
   <script src="https://cdn.jsdelivr.net/npm/marked@18.0.7/lib/marked.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.14/dist/purify.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"></script>
   <script>
-    // Markdownを描画した後にmermaid.run()を呼ぶため、自動描画は無効にする。
-    mermaid.initialize({ startOnLoad: false });
-
-    // OS／ブラウザがダークモードなら、図にもMermaidのダークテーマを適用する。
-    if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      mermaid.initialize({ theme: 'dark' });
-    }
+    // 自動描画を無効にし、信頼できない図を厳格な設定で描画する。
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'
+    });
   </script>
 
   <!-- Markdown用CSSの読み込み -->
@@ -106,8 +106,7 @@
   <!-- Markdown内の数式を描画するKaTeXと自動レンダリング拡張 -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"
-          onload="renderMathInElement(document.body);"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"></script>
 
 </head>
 <body>
@@ -146,12 +145,24 @@
     const imageObjectUrls = new Set(); // 現在のプレビューで使用している画像のBlob URL
     let lastModified = 0;      // 最後に描画したファイルの更新日時（不要な再描画を防ぐ）
 
-    // mermaidコードブロックは、Mermaidが認識する専用要素として直接出力する。
+    // Markdown由来のHTMLはHTML要素だけを許可し、画面改変やDOM参照への干渉を防ぐ。
+    const sanitizeConfig = {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ['style', 'template'],
+      FORBID_ATTR: ['style'],
+      SANITIZE_NAMED_PROPS: true
+    };
+    let activeMermaidSources = null;
+
+    // MermaidソースはHTMLへ埋め込まず、サニタイズ後に復元するため配列へ退避する。
     marked.use({
       renderer: {
         code({ text, lang }) {
           if (lang?.trim().toLowerCase() !== 'mermaid') return false;
-          return `<pre class="mermaid">${text}</pre>`;
+          if (!activeMermaidSources) return false;
+
+          const sourceIndex = activeMermaidSources.push(text) - 1;
+          return `<pre class="mermaid" data-mermaid-source="${sourceIndex}"></pre>`;
         }
       }
     });
@@ -237,10 +248,11 @@
       // これからプレビューを置き換えるため、前回の画像URLは不要になる。
       revokeImageObjectUrls();
 
-      // HTMLへ変換する前のトークン段階で画像URLを書き換える。
+      // HTMLへ変換する前のトークン段階で、ローカル画像を一時参照へ置き換える。
       const tokens = marked.lexer(text);
+      const localImages = new Map();
 
-      /** 入れ子のトークンも含め、ローカル画像の参照先をBlob URLへ変換する。 */
+      /** 入れ子のトークンも含め、ローカル画像と一時参照の対応表を作成する。 */
       function rewriteImageTokens(tokens) {
         for (const token of tokens) {
           if (token.type === 'image' && token.href && !isExternalUrl(token.href)) {
@@ -258,9 +270,9 @@
                 const file = fileMap.get(imagePath);
 
                 if (file) {
-                  const objectUrl = URL.createObjectURL(file);
-                  imageObjectUrls.add(objectUrl);
-                  token.href = objectUrl + fragment;
+                  const placeholder = `#markdown-preview-local-image-${localImages.size}`;
+                  localImages.set(placeholder, { file, fragment });
+                  token.href = placeholder;
                 } else {
                   console.warn('画像ファイルが見つかりません:', imagePath);
                 }
@@ -273,9 +285,41 @@
       }
 
       rewriteImageTokens(tokens);
-      const html = marked.parser(tokens);
+      const mermaidSources = [];
+      activeMermaidSources = mermaidSources;
 
-      preview.innerHTML = html;
+      let html;
+      try {
+        html = marked.parser(tokens);
+      } finally {
+        activeMermaidSources = null;
+      }
+
+      const cleanHtml = DOMPurify.sanitize(html, sanitizeConfig);
+
+      // 実際の画面へ挿入する前の一時DOM上で、アプリが生成したBlob URLを設定する。
+      const template = document.createElement('template');
+      template.innerHTML = cleanHtml;
+
+      for (const image of template.content.querySelectorAll('img[src]')) {
+        const localImage = localImages.get(image.getAttribute('src'));
+        if (!localImage) continue;
+
+        const objectUrl = URL.createObjectURL(localImage.file);
+        imageObjectUrls.add(objectUrl);
+        image.setAttribute('src', objectUrl + localImage.fragment);
+      }
+
+      preview.replaceChildren(template.content);
+
+      // MermaidソースをHTMLとして解釈させず、専用要素のテキストとして復元する。
+      for (const element of preview.querySelectorAll('.mermaid[data-mermaid-source]')) {
+        const sourceIndex = Number(element.getAttribute('data-mermaid-source'));
+        if (Number.isInteger(sourceIndex) && mermaidSources[sourceIndex] !== undefined) {
+          element.textContent = mermaidSources[sourceIndex];
+        }
+        element.removeAttribute('data-mermaid-source');
+      }
 
       // 生成したプレビュー領域だけを対象にKaTeXで数式を描画する。
       renderMathInElement(preview, {
@@ -285,12 +329,13 @@
           {left: "\\(", right: "\\)", display: false},
           {left: "\\[", right: "\\]", display: true}
         ],
+        trust: false,
         throwOnError: false
       });
 
 
       // リンクは新しいタブで開き、遷移先から元画面を操作できないようにする。
-      document.querySelectorAll('a[href]').forEach(link => {
+      preview.querySelectorAll('a[href]').forEach(link => {
         link.setAttribute('target', '_blank');
         link.setAttribute('rel', 'noopener noreferrer');
       });
