@@ -26,6 +26,11 @@
       font-family: sans-serif;
       margin: 0;
     }
+    @media screen and (prefers-color-scheme: dark) {
+      body {
+        background-color: var(--color-background, #1a202f);
+      }
+    }
     #file-controls {
       position: sticky;
       top: 0;
@@ -109,7 +114,7 @@
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"></script>
 
 </head>
-<body>
+<body class="markdown-colorpallet">
   <!-- ファイル操作欄（Hidden_when_printingは印刷対象外にするためのクラス） -->
   <div id="file-controls" class="Hidden_when_printing">
     <button id="open-folder">📁 フォルダ選択</button>
