@@ -4,9 +4,12 @@
   <meta charset="UTF-8" />
   <title>Markdown_Preview</title>
 
-  <!-- Markdownの変換とMermaid図の描画に使用する外部ライブラリ -->
+  <!-- Markdownの変換・サニタイズ・構文ハイライト・Mermaid図の描画 -->
   <script src="https://cdn.jsdelivr.net/npm/marked@18.0.7/lib/marked.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.14/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/powershell.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/dos.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"></script>
   <script>
     // 自動描画を無効にし、信頼できない図を厳格な設定で描画する。
@@ -20,7 +23,18 @@
   <!-- Markdown用CSSの読み込み -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Star-Delta/Markdown-CSS@0/Markdown.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Star-Delta/Markdown-CSS@0/Markdown_Print.css" media="print">
+  <!-- 画面の配色に追従し、印刷には常にライト用テーマを使用する。 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github.min.css" media="(prefers-color-scheme: light), print">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github-dark.min.css" media="screen and (prefers-color-scheme: dark)">
   <style>
+    /* コードの枠・背景・スクロールはMarkdown-CSSのpreに任せる。 */
+    #preview pre code.hljs {
+      display: block;
+      padding: 0;
+      overflow: visible;
+      background: transparent;
+    }
+
     /* 操作欄と情報モーダルのレイアウト */
     body {
       font-family: sans-serif;
@@ -248,7 +262,37 @@
       imageObjectUrls.clear();
     }
 
-    /** Markdown文字列をHTMLへ変換し、画像・数式・Mermaid図を描画する。 */
+    /** 明示された対応言語だけを強調し、未指定・未対応のコードはそのまま表示する。 */
+    function highlightCodeBlocks() {
+      const highlighter = window.hljs;
+      if (!highlighter || typeof highlighter.highlightElement !== 'function') return;
+
+      for (const code of preview.querySelectorAll('pre code')) {
+        if (code.closest('.mermaid, .nohighlight, .no-highlight')) continue;
+        // HTMLで直接記述された子要素や、処理済みのコードには触れない。
+        if (code.childElementCount > 0 || code.hasAttribute('data-highlighted')) continue;
+
+        const languageClass = Array.from(code.classList).find(name => /^language-/i.test(name));
+        if (!languageClass) continue;
+        const language = languageClass.slice('language-'.length).toLowerCase();
+        if (['mermaid', 'text', 'txt', 'plaintext', 'nohighlight', 'no-highlight'].includes(language)) continue;
+
+        const source = code.textContent;
+        const originalClass = code.className;
+        try {
+          if (!highlighter.getLanguage(language)) continue;
+          highlighter.highlightElement(code);
+        } catch (err) {
+          // 個別のハイライト失敗で、後続の数式やMermaidの描画を止めない。
+          code.textContent = source;
+          code.className = originalClass;
+          code.removeAttribute('data-highlighted');
+          console.warn('コードのハイライトに失敗しました:', language, err);
+        }
+      }
+    }
+
+    /** Markdown文字列をHTMLへ変換し、コード・画像・数式・Mermaid図を描画する。 */
     async function renderMarkdown(text) {
       // これからプレビューを置き換えるため、前回の画像URLは不要になる。
       revokeImageObjectUrls();
@@ -325,6 +369,9 @@
         }
         element.removeAttribute('data-mermaid-source');
       }
+
+      // サニタイズ済みのプレビューを対象に、再描画のたびにハイライトする。
+      highlightCodeBlocks();
 
       // 生成したプレビュー領域だけを対象にKaTeXで数式を描画する。
       renderMathInElement(preview, {
