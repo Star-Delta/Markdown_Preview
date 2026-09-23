@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8" />
+  <title>Markdown_Preview</title>
+
+  <!-- Markdownの変換・サニタイズ・構文ハイライト・Mermaid図の描画 -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@18.0.7/lib/marked.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.14/dist/purify.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/powershell.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/dos.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"></script>
+  <script>
+    // 自動描画を無効にし、信頼できない図を厳格な設定で描画する。
+    mermaid.initialize({
+      startOnLoad: false,
+      securityLevel: 'strict',
+      theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'
+    });
+  </script>
+
+  <!-- Markdown用CSSの読み込み -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Star-Delta/Markdown-CSS@0/Markdown.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Star-Delta/Markdown-CSS@0/Markdown_Print.css" media="print">
+  <!-- 画面の配色に追従し、印刷には常にライト用テーマを使用する。 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/github.min.css" media="(prefers-color-scheme: light), print">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/styles/monokai.min.css" media="screen and (prefers-color-scheme: dark)">
+  <style>
+    /* コードの枠・背景・スクロールはMarkdown-CSSのpreに任せる。 */
+    #preview pre code.hljs {
+      display: block;
+      padding: 0;
+      overflow: visible;
+      background: transparent;
+    }
+
+    /* 操作欄と情報モーダルのレイアウト */
+    body {
+      font-family: sans-serif;
+      margin: 0;
+    }
+    @media screen and (prefers-color-scheme: dark) {
+      body {
+        background-color: var(--color-background, #1a202f);
+      }
+    }
+    #file-controls {
+      position: sticky;
+      top: 0;
+      z-index: 999;
+      background: Canvas;
+      border-bottom: 1px solid rgba(128, 128, 128, 0.35);
+    }
+    @media (prefers-color-scheme: dark) {
+      #file-controls {
+        color-scheme: dark;
+        color: #f0f6fc;
+        background: #0d1117;
+        border-bottom-color: #30363d;
+      }
+    }
+    #open-folder, #file-select, #info-button {
+      font-size: 1.2em;
+      margin: 0.2em;
+      padding: 0.2em;
+      cursor: pointer;
+    }
+    #info-button {
+      position: absolute;
+      top: 0.2em;
+      right: 0.2em;
+      z-index: 1001;
+    }
+    #info-close {
+      position: absolute;
+      top: 5px;
+      right: 10px;
+      font-size: 1.5em;
+      cursor: pointer;
+    }
+    .info-modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0; top: 0;
+      width: 100%; height: 100%;
+      background-color: rgba(0,0,0,0.4);
+    }
+    .info-content {
+      background: white;
+      margin: 10% auto;
+      padding: 1em 2em;
+      border-radius: 8px;
+      width: fit-content;
+      max-width: 90%;
+      font-size: 0.95em;
+      box-shadow: 0 0 10px rgba(0,0,0,0.3);
+      position: relative;
+    }
+    @media (prefers-color-scheme: dark) {
+      .info-content {
+        color-scheme: dark;
+        color: #f0f6fc;
+        background: #161b22;
+        border: 1px solid #30363d;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.7);
+      }
+      .info-content a {
+        color: #58a6ff;
+      }
+      #info-close {
+        color: #f0f6fc;
+      }
+    }
+
+    /* 印刷時は操作ボタンやモーダルを出力しない */
+    @media print {
+      .Hidden_when_printing {
+        display: none;
+      }
+    }
+  </style>
+
+  <!-- Markdown内の数式を描画するKaTeXと自動レンダリング拡張 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"></script>
+
+</head>
+<body class="markdown-colorpallet">
+  <!-- ファイル操作欄（Hidden_when_printingは印刷対象外にするためのクラス） -->
+  <div id="file-controls" class="Hidden_when_printing">
+    <button id="open-folder">📁 フォルダ選択</button>
+    /
+    <select id="file-select"></select>
+    <button id="info-button" title="このツールについて">ℹ️</button>
+  </div>
+
+  <div id="preview" class="markdown-body">
+    <p><em>ここにMarkdownのプレビューが表示されます</em></p>
+  </div>
+
+  <!-- ツール情報を表示するモーダル。通常はCSSで非表示にしている -->
+  <div id="info-modal" class="info-modal Hidden_when_printing">
+    <div class="info-content">
+      <span id="info-close">&times;</span>
+      <p>
+        <a href="https://github.com/Star-Delta/Markdown_Preview" target="_blank" rel="noopener noreferrer">Markdown_Preview</a>(開発者: <a href="https://github.com/Star-Delta" target="_blank" rel="noopener noreferrer">Star-Delta</a>)<br>
+        <a href="README.md" target="_blank" rel="noopener noreferrer">使い方</a>/<a href="LICENSE" target="_blank" rel="noopener noreferrer">ライセンス</a><br>
+      </p>
+    </div>
+  </div>
+
+  <script>
+    // 頻繁に参照する画面要素を保持する。
+    const openFolderBtn = document.getElementById('open-folder');
+    const fileSelect = document.getElementById('file-select');
+    const preview = document.getElementById('preview');
+
+    let mdHandle = null;       // 現在プレビューしているMarkdownファイルのハンドル
+    let mdPath = '';           // 現在プレビューしているMarkdownの選択フォルダからの相対パス
+    let fileMap = new Map();   // Markdownから参照する画像等の相対パスとFileの対応表
+    const imageObjectUrls = new Set(); // 現在のプレビューで使用している画像のBlob URL
+    let lastModified = 0;      // 最後に描画したファイルの更新日時（不要な再描画を防ぐ）
+
+    // Markdown由来のHTMLはHTML要素だけを許可し、画面改変やDOM参照への干渉を防ぐ。
+    const sanitizeConfig = {
+      USE_PROFILES: { html: true },
+      FORBID_TAGS: ['style', 'template'],
+      FORBID_ATTR: ['style'],
+      SANITIZE_NAMED_PROPS: true
+    };
+    let activeMermaidSources = null;
+
+    // MermaidソースはHTMLへ埋め込まず、サニタイズ後に復元するため配列へ退避する。
+    marked.use({
+      renderer: {
+        code({ text, lang }) {
+          if (lang?.trim().toLowerCase() !== 'mermaid') return false;
+          if (!activeMermaidSources) return false;
+
+          const sourceIndex = activeMermaidSources.push(text) - 1;
+          return `<pre class="mermaid" data-mermaid-source="${sourceIndex}"></pre>`;
+        }
+      }
+    });
+
+    /**
+     * 選択されたフォルダ以下を再帰的に走査し、全ファイルを収集する。
+     * pathは選択フォルダを基準とした相対パスとして引き継ぐ。
+     */
+    async function getFilesRecursively(dirHandle, path = '') {
+      const files = [];
+      for await (const entry of dirHandle.values()) {
+        if (entry.kind === 'file') {
+          files.push({ handle: entry, path: path + entry.name });
+        } else if (entry.kind === 'directory') {
+          const nested = await getFilesRecursively(entry, path + entry.name + '/');
+          files.push(...nested);
+        }
+      }
+      return files;
+    }
+
+    /** スキーム付きURLまたはプロトコル相対URLなら、ブラウザにそのまま解決させる。 */
+    function isExternalUrl(path) {
+      return /^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//');
+    }
+
+    /** ローカル画像URLを、検索対象のパス・クエリ・フラグメントに分ける。 */
+    function splitLocalImageUrl(url) {
+      const fragmentIndex = url.indexOf('#');
+      const fragment = fragmentIndex >= 0 ? url.slice(fragmentIndex) : '';
+      const beforeFragment = fragmentIndex >= 0 ? url.slice(0, fragmentIndex) : url;
+      const queryIndex = beforeFragment.indexOf('?');
+
+      return {
+        pathname: queryIndex >= 0 ? beforeFragment.slice(0, queryIndex) : beforeFragment,
+        query: queryIndex >= 0 ? beforeFragment.slice(queryIndex) : '',
+        fragment
+      };
+    }
+
+    /** URLデコードに失敗した場合は、描画を止めずnullを返す。 */
+    function safeDecodeURIComponent(value) {
+      try {
+        return decodeURIComponent(value);
+      } catch {
+        return null;
+      }
+    }
+
+    /** Markdownの位置を基準に画像の相対パスを解決し、選択フォルダ基準のパスを返す。 */
+    function resolveRelativePath(markdownPath, relativePath) {
+      // 先頭が「/」なら選択フォルダ、それ以外はMarkdownの親フォルダを基準にする。
+      const resolvedSegments = relativePath.startsWith('/')
+        ? []
+        : markdownPath.split('/').slice(0, -1);
+
+      for (const segment of relativePath.split('/')) {
+        if (!segment || segment === '.') continue;
+
+        if (segment === '..') {
+          // 選択フォルダより上のファイルにはアクセスできない。
+          if (resolvedSegments.length === 0) return null;
+          resolvedSegments.pop();
+          continue;
+        }
+
+        resolvedSegments.push(segment);
+      }
+
+      return resolvedSegments.join('/');
+    }
+
+    /** 前回のプレビューで生成した画像のBlob URLを破棄する。 */
+    function revokeImageObjectUrls() {
+      for (const url of imageObjectUrls) {
+        URL.revokeObjectURL(url);
+      }
+      imageObjectUrls.clear();
+    }
+
+    /** 明示された対応言語だけを強調し、未指定・未対応のコードはそのまま表示する。 */
+    function highlightCodeBlocks() {
+      const highlighter = window.hljs;
+      if (!highlighter || typeof highlighter.highlightElement !== 'function') return;
+
+      for (const code of preview.querySelectorAll('pre code')) {
+        if (code.closest('.mermaid, .nohighlight, .no-highlight')) continue;
+        // HTMLで直接記述された子要素や、処理済みのコードには触れない。
+        if (code.childElementCount > 0 || code.hasAttribute('data-highlighted')) continue;
+
+        const languageClass = Array.from(code.classList).find(name => /^language-/i.test(name));
+        if (!languageClass) continue;
+        const language = languageClass.slice('language-'.length).toLowerCase();
+        if (['mermaid', 'text', 'txt', 'plaintext', 'nohighlight', 'no-highlight'].includes(language)) continue;
+
+        const source = code.textContent;
+        const originalClass = code.className;
+        try {
+          if (!highlighter.getLanguage(language)) continue;
+          highlighter.highlightElement(code);
+        } catch (err) {
+          // 個別のハイライト失敗で、後続の数式やMermaidの描画を止めない。
+          code.textContent = source;
+          code.className = originalClass;
+          code.removeAttribute('data-highlighted');
+          console.warn('コードのハイライトに失敗しました:', language, err);
+        }
+      }
+    }
+
+    /** Markdown文字列をHTMLへ変換し、コード・画像・数式・Mermaid図を描画する。 */
+    async function renderMarkdown(text) {
+      // これからプレビューを置き換えるため、前回の画像URLは不要になる。
+      revokeImageObjectUrls();
+
+      // HTMLへ変換する前のトークン段階で、ローカル画像を一時参照へ置き換える。
+      const tokens = marked.lexer(text);
+      const localImages = new Map();
+
+      /** 入れ子のトークンも含め、ローカル画像と一時参照の対応表を作成する。 */
+      function rewriteImageTokens(tokens) {
+        for (const token of tokens) {
+          if (token.type === 'image' && token.href && !isExternalUrl(token.href)) {
+            const { pathname, fragment } = splitLocalImageUrl(token.href);
+            const decodedPath = safeDecodeURIComponent(pathname);
+
+            if (decodedPath === null) {
+              console.warn('画像パスをURLデコードできません:', token.href);
+            } else {
+              const imagePath = resolveRelativePath(mdPath, decodedPath);
+
+              if (imagePath === null) {
+                console.warn('画像パスが選択フォルダの外を参照しています:', token.href);
+              } else {
+                const file = fileMap.get(imagePath);
+
+                if (file) {
+                  const placeholder = `#markdown-preview-local-image-${localImages.size}`;
+                  localImages.set(placeholder, { file, fragment });
+                  token.href = placeholder;
+                } else {
+                  console.warn('画像ファイルが見つかりません:', imagePath);
+                }
+              }
+            }
+          }
+          // 強調やリンクなどの内部に画像がある場合に備えて再帰的に処理する。
+          if (token.tokens) rewriteImageTokens(token.tokens);
+        }
+      }
+
+      rewriteImageTokens(tokens);
+      const mermaidSources = [];
+      activeMermaidSources = mermaidSources;
+
+      let html;
+      try {
+        html = marked.parser(tokens);
+      } finally {
+        activeMermaidSources = null;
+      }
+
+      const cleanHtml = DOMPurify.sanitize(html, sanitizeConfig);
+
+      // 実際の画面へ挿入する前の一時DOM上で、アプリが生成したBlob URLを設定する。
+      const template = document.createElement('template');
+      template.innerHTML = cleanHtml;
+
+      for (const image of template.content.querySelectorAll('img[src]')) {
+        const localImage = localImages.get(image.getAttribute('src'));
+        if (!localImage) continue;
+
+        const objectUrl = URL.createObjectURL(localImage.file);
+        imageObjectUrls.add(objectUrl);
+        image.setAttribute('src', objectUrl + localImage.fragment);
+      }
+
+      preview.replaceChildren(template.content);
+
+      // MermaidソースをHTMLとして解釈させず、専用要素のテキストとして復元する。
+      for (const element of preview.querySelectorAll('.mermaid[data-mermaid-source]')) {
+        const sourceIndex = Number(element.getAttribute('data-mermaid-source'));
+        if (Number.isInteger(sourceIndex) && mermaidSources[sourceIndex] !== undefined) {
+          element.textContent = mermaidSources[sourceIndex];
+        }
+        element.removeAttribute('data-mermaid-source');
+      }
+
+      // サニタイズ済みのプレビューを対象に、再描画のたびにハイライトする。
+      highlightCodeBlocks();
+
+      // 生成したプレビュー領域だけを対象にKaTeXで数式を描画する。
+      renderMathInElement(preview, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true}
+        ],
+        trust: false,
+        throwOnError: false
+      });
+
+
+      // リンクは新しいタブで開き、遷移先から元画面を操作できないようにする。
+      preview.querySelectorAll('a[href]').forEach(link => {
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+      });
+
+      // HTMLへの挿入が済んだ後でMermaid図を描画する。
+      await mermaid.run({
+        nodes: preview.querySelectorAll('.mermaid')
+      });
+    }
+
+    /**
+     * 選択中ファイルの更新日時を確認し、変更された場合だけ再描画する。
+     * setIntervalからも呼ばれるため、読み取り失敗は画面を止めずログへ記録する。
+     */
+    async function updatePreviewIfChanged() {
+      if (!mdHandle) return;
+      try {
+        const file = await mdHandle.getFile();
+        if (file.lastModified !== lastModified) {
+          lastModified = file.lastModified;
+          const text = await file.text();
+          await renderMarkdown(text);
+        }
+      } catch (err) {
+        console.error('更新失敗:', err);
+      }
+    }
+
+    // フォルダを選択し、Markdown一覧とローカルファイルの対応表を作成する。
+    openFolderBtn.addEventListener('click', async () => {
+      // File System Access APIは対応ブラウザでのみ利用できる。
+      if (!window.showDirectoryPicker) {
+        alert('このブラウザは File System Access API に対応していません。');
+        return;
+      }
+
+      try {
+        const dirHandle = await window.showDirectoryPicker();
+        openFolderBtn.textContent = `📁 ${dirHandle.name}`;
+
+        // サブフォルダを含む全ファイルから、選択候補となるMarkdownだけを抽出する。
+        const entries = await getFilesRecursively(dirHandle);
+        const mdFiles = entries.filter(e => /\.(md|markdown)$/i.test(e.path));
+        if (mdFiles.length === 0) return alert('.md または .markdown ファイルが見つかりません。');
+
+        fileSelect.innerHTML = '';
+        // プルダウンの値にはmdFiles配列の添字を使用する。
+        mdFiles.forEach(({ path }, i) => {
+          const opt = document.createElement('option');
+          opt.value = i;
+          opt.textContent = path;
+          fileSelect.appendChild(opt);
+        });
+
+        // 選択フォルダを基準とした相対パスで、画像等のファイルを検索できるようにする。
+        fileMap.clear();
+        for (const { handle, path } of entries) {
+          const file = await handle.getFile();
+          fileMap.set(path, file);
+        }
+
+        // 初期表示は一覧の先頭にあるMarkdownとする。
+        mdHandle = mdFiles[0].handle;
+        mdPath = mdFiles[0].path;
+        lastModified = 0;
+        await updatePreviewIfChanged();
+
+        // 選択が変わったら監視対象を差し替え、更新日時をリセットして即時描画する。
+        fileSelect.onchange = async () => {
+          const selected = mdFiles[parseInt(fileSelect.value)];
+          mdHandle = selected.handle;
+          mdPath = selected.path;
+          lastModified = 0;
+          await updatePreviewIfChanged();
+        };
+      } catch (err) {
+        console.error(err);
+        alert('フォルダの読み込みに失敗しました。');
+      }
+    });
+
+    // 外部エディタでの保存を検知するため、1秒ごとに更新日時を確認する。
+    setInterval(updatePreviewIfChanged, 1000);
+
+    // 情報モーダルを開閉する。背景部分のクリックでも閉じられる。
+    document.getElementById('info-button').onclick = () => {
+      document.getElementById('info-modal').style.display = 'block';
+    };
+    document.getElementById('info-close').onclick = () => {
+      document.getElementById('info-modal').style.display = 'none';
+    };
+    window.onclick = (e) => {
+      if (e.target === document.getElementById('info-modal')) {
+        document.getElementById('info-modal').style.display = 'none';
+      }
+    };
+  </script>
+</body>
+</html>
