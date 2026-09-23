@@ -5,6 +5,7 @@
    1. [主な機能](#主な機能)
    2. [動作環境](#動作環境)
 3. [使用方法](#使用方法)
+   1. [基本操作](#基本操作)
 4. [使用ライブラリ](#使用ライブラリ)
    1. [Marked](#marked)
    2. [DOMPurify](#dompurify)
@@ -45,22 +46,27 @@ Webブラウザ上でローカルのMarkdownファイル（`.md`、`.markdown`�
 - フォルダの読み込み時にブラウザの許可が必要です。本ツールは選択されたフォルダ内のファイルを読み取りますが、ファイルの書き込みは行いません。
 
 ## 使用方法
+Web版とDownload版があり、どちらも機能に差はありません。
 
-1. [GitHub](https://github.com/Star-Delta/Markdown_Preview/tags)から最新のバージョンをダウンロード
-2. ブラウザで `Markdown_Preview.html` を開く
-3. 「📁 フォルダ選択」ボタンをクリック
-4. `.md` または `.markdown` ファイルが含まれたローカルフォルダを選択
+| 使用方法   | URL                                                                | 準備                                                                                                  |
+| ---------- | ------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
+| Web版      | [Markdown_Preview](https://star-delta.github.io/Markdown_Preview/) | リンク先ににアクセスするだけで使用できます。                                                          |
+| Download版 | [GitHub](https://github.com/Star-Delta/Markdown_Preview/tags)      | リンク先から最新のバージョンをダウンロードし、Webブラウザで`Markdown_Preview.html` を開いてください。 |
+
+### 基本操作
+1. 「📁 フォルダ選択」ボタンをクリック
+2. `.md` または `.markdown` ファイルが含まれたローカルフォルダを選択
 
 ## 使用ライブラリ
 
-| ライブラリ名                                               | 利用Version   | 用途                                       |
-| ---------------------------------------------------------- | ------------- | ------------------------------------------ |
-| [Marked](https://marked.js.org/)                           | 18.0.7        | MarkdownをHTMLへ変換                       |
-| [DOMPurify](https://github.com/cure53/DOMPurify)           | 3.4.14        | Markdownから生成したHTMLをサニタイズ       |
-| [Highlight.js](https://highlightjs.org/)                   | 本体: 11.11.1 | 言語指定付きコードブロックの構文ハイライト |
-| [Mermaid](https://mermaid.js.org/)                         | 11.16.0       | Mermaidコードブロックを図として描画        |
-| [KaTeX](https://katex.org/)                                | 0.16.0        | インライン数式・ブロック数式を描画         |
-| [Markdown-CSS](https://github.com/Star-Delta/Markdown-CSS) | 0             | Markdownの画面表示・印刷用スタイルを適用   |
+| ライブラリ名                                               | 利用Version | 用途                                       |
+| ---------------------------------------------------------- | ----------- | ------------------------------------------ |
+| [Marked](https://marked.js.org/)                           | 18.0.7      | MarkdownをHTMLへ変換                       |
+| [DOMPurify](https://github.com/cure53/DOMPurify)           | 3.4.14      | Markdownから生成したHTMLをサニタイズ       |
+| [Highlight.js](https://highlightjs.org/)                   | 11.11.1     | 言語指定付きコードブロックの構文ハイライト |
+| [Mermaid](https://mermaid.js.org/)                         | 11.16.0     | Mermaidコードブロックを図として描画        |
+| [KaTeX](https://katex.org/)                                | 0.16.0      | インライン数式・ブロック数式を描画         |
+| [Markdown-CSS](https://github.com/Star-Delta/Markdown-CSS) | 0           | Markdownの画面表示・印刷用スタイルを適用   |
 
 ### Marked
 
