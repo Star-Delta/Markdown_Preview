@@ -123,9 +123,9 @@
   </style>
 
   <!-- Markdown内の数式を描画するKaTeXと自動レンダリング拡張 -->
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.css">
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/katex.min.js"></script>
-  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.0/dist/contrib/auto-render.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.18.7/dist/katex.min.css">
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.7/dist/katex.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.18.7/dist/contrib/auto-render.min.js"></script>
 
 </head>
 <body class="markdown-colorpallet">
@@ -161,14 +161,14 @@
     let mdHandle = null;       // 現在プレビューしているMarkdownファイルのハンドル
     let mdPath = '';           // 現在プレビューしているMarkdownの選択フォルダからの相対パス
     let fileMap = new Map();   // Markdownから参照する画像等の相対パスとFileの対応表
-    const imageObjectUrls = new Set(); // 現在のプレビューで使用している画像のBlob URL
+    const resourceObjectUrls = new Set(); // 現在のプレビューで使用している画像・動画・音声のBlob URL
     let lastModified = 0;      // 最後に描画したファイルの更新日時（不要な再描画を防ぐ）
 
     // Markdown由来のHTMLはHTML要素だけを許可し、画面改変やDOM参照への干渉を防ぐ。
     const sanitizeConfig = {
       USE_PROFILES: { html: true },
-      FORBID_TAGS: ['style', 'template'],
-      FORBID_ATTR: ['style'],
+      FORBID_TAGS: ['style', 'template', 'form', 'button', 'select', 'textarea'],
+      FORBID_ATTR: ['style', 'srcset'],
       SANITIZE_NAMED_PROPS: true
     };
     let activeMermaidSources = null;
@@ -208,8 +208,8 @@
       return /^[a-z][a-z\d+.-]*:/i.test(path) || path.startsWith('//');
     }
 
-    /** ローカル画像URLを、検索対象のパス・クエリ・フラグメントに分ける。 */
-    function splitLocalImageUrl(url) {
+    /** ローカルリソースURLを、検索対象のパス・クエリ・フラグメントに分ける。 */
+    function splitLocalResourceUrl(url) {
       const fragmentIndex = url.indexOf('#');
       const fragment = fragmentIndex >= 0 ? url.slice(fragmentIndex) : '';
       const beforeFragment = fragmentIndex >= 0 ? url.slice(0, fragmentIndex) : url;
@@ -231,7 +231,7 @@
       }
     }
 
-    /** Markdownの位置を基準に画像の相対パスを解決し、選択フォルダ基準のパスを返す。 */
+    /** Markdownの位置を基準に相対パスを解決し、選択フォルダ基準のパスを返す。 */
     function resolveRelativePath(markdownPath, relativePath) {
       // 先頭が「/」なら選択フォルダ、それ以外はMarkdownの親フォルダを基準にする。
       const resolvedSegments = relativePath.startsWith('/')
@@ -254,12 +254,33 @@
       return resolvedSegments.join('/');
     }
 
-    /** 前回のプレビューで生成した画像のBlob URLを破棄する。 */
-    function revokeImageObjectUrls() {
-      for (const url of imageObjectUrls) {
+    /** 前回のプレビューで生成した画像・動画・音声のBlob URLを破棄する。 */
+    function revokeResourceObjectUrls() {
+      for (const url of resourceObjectUrls) {
         URL.revokeObjectURL(url);
       }
-      imageObjectUrls.clear();
+      resourceObjectUrls.clear();
+    }
+
+    /** サニタイズ済み属性のローカル参照をBlob URLに置換し、未解決なら除去する。 */
+    function resolveResourceAttribute(element, attribute) {
+      const source = (element.getAttribute(attribute) || '').trim().replace(/[\t\n\r]/g, '');
+      if (source && isExternalUrl(source)) return true;
+
+      const { pathname, fragment } = splitLocalResourceUrl(source);
+      const decodedPath = safeDecodeURIComponent(pathname);
+      const resourcePath = decodedPath ? resolveRelativePath(mdPath, decodedPath) : null;
+      const file = resourcePath === null ? null : fileMap.get(resourcePath);
+
+      if (!file) {
+        element.removeAttribute(attribute);
+        return false;
+      }
+
+      const objectUrl = URL.createObjectURL(file);
+      resourceObjectUrls.add(objectUrl);
+      element.setAttribute(attribute, objectUrl + fragment);
+      return true;
     }
 
     /** 明示された対応言語だけを強調し、未指定・未対応のコードはそのまま表示する。 */
@@ -292,48 +313,12 @@
       }
     }
 
-    /** Markdown文字列をHTMLへ変換し、コード・画像・数式・Mermaid図を描画する。 */
+    /** Markdown文字列をHTMLへ変換し、画像・メディア・コード・数式・Mermaid図を描画する。 */
     async function renderMarkdown(text) {
-      // これからプレビューを置き換えるため、前回の画像URLは不要になる。
-      revokeImageObjectUrls();
+      // これからプレビューを置き換えるため、前回のリソースURLは不要になる。
+      revokeResourceObjectUrls();
 
-      // HTMLへ変換する前のトークン段階で、ローカル画像を一時参照へ置き換える。
       const tokens = marked.lexer(text);
-      const localImages = new Map();
-
-      /** 入れ子のトークンも含め、ローカル画像と一時参照の対応表を作成する。 */
-      function rewriteImageTokens(tokens) {
-        for (const token of tokens) {
-          if (token.type === 'image' && token.href && !isExternalUrl(token.href)) {
-            const { pathname, fragment } = splitLocalImageUrl(token.href);
-            const decodedPath = safeDecodeURIComponent(pathname);
-
-            if (decodedPath === null) {
-              console.warn('画像パスをURLデコードできません:', token.href);
-            } else {
-              const imagePath = resolveRelativePath(mdPath, decodedPath);
-
-              if (imagePath === null) {
-                console.warn('画像パスが選択フォルダの外を参照しています:', token.href);
-              } else {
-                const file = fileMap.get(imagePath);
-
-                if (file) {
-                  const placeholder = `#markdown-preview-local-image-${localImages.size}`;
-                  localImages.set(placeholder, { file, fragment });
-                  token.href = placeholder;
-                } else {
-                  console.warn('画像ファイルが見つかりません:', imagePath);
-                }
-              }
-            }
-          }
-          // 強調やリンクなどの内部に画像がある場合に備えて再帰的に処理する。
-          if (token.tokens) rewriteImageTokens(token.tokens);
-        }
-      }
-
-      rewriteImageTokens(tokens);
       const mermaidSources = [];
       activeMermaidSources = mermaidSources;
 
@@ -350,13 +335,39 @@
       const template = document.createElement('template');
       template.innerHTML = cleanHtml;
 
-      for (const image of template.content.querySelectorAll('img[src]')) {
-        const localImage = localImages.get(image.getAttribute('src'));
-        if (!localImage) continue;
+      // サニタイズ済みの全imgを処理し、リスト・表・HTML記法も同じ規則で解決する。
+      // 未解決の参照は画面へ挿入する前に除去し、ツールのURLを基準に読み込ませない。
+      for (const image of template.content.querySelectorAll('img')) {
+        if (!resolveResourceAttribute(image, 'src')) {
+          const fallback = document.createElement('span');
+          const alt = image.getAttribute('alt');
+          fallback.textContent = alt ? `${alt}（画像が見つかりません）` : '画像が見つかりません';
+          image.replaceWith(fallback);
+        }
+      }
 
-        const objectUrl = URL.createObjectURL(localImage.file);
-        imageObjectUrls.add(objectUrl);
-        image.setAttribute('src', objectUrl + localImage.fragment);
+      // 動画・音声本体、直下の候補、動画のポスターも表示前に確認する。
+      for (const media of template.content.querySelectorAll('video, audio')) {
+        const missing = new Set();
+        const label = media.localName === 'video' ? '動画' : '音声';
+        if (media.hasAttribute('src') && !resolveResourceAttribute(media, 'src')) {
+          missing.add(label);
+        }
+        for (const source of media.querySelectorAll(':scope > source')) {
+          if (!resolveResourceAttribute(source, 'src')) {
+            source.remove();
+            missing.add(label);
+          }
+        }
+        if (media.localName === 'video' && media.hasAttribute('poster') &&
+            !resolveResourceAttribute(media, 'poster')) {
+          missing.add('ポスター画像');
+        }
+        if (missing.size > 0) {
+          const fallback = document.createElement('span');
+          fallback.textContent = `（${Array.from(missing).join('・')}の参照先が見つかりません）`;
+          media.after(fallback);
+        }
       }
 
       preview.replaceChildren(template.content);

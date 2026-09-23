@@ -34,8 +34,13 @@ Webブラウザ上でローカルのMarkdownファイル（`.md`、`.markdown`�
 
 > [!Warning]
 > **現時点の制限事項・既知の非対応**
-> - 🖼 Markdown記法（`![代替テキスト](画像パス)`）によるローカル画像表示は試験的な対応です。HTMLの`<img>`によるローカル画像指定は相対パス解決の対象外であり、正しく表示されない場合があります。
+> - 🖼 ローカル画像は選択フォルダ内のファイルが対象です。見つからない画像は、代替テキストと「画像が見つかりません」を表示します。
+> - 🖼 `srcset`による画像候補の切り替えには対応していません。`<picture>`も`<img src="…">`のみで表示します。
+> - 🎞 HTMLの`video`・`audio`によるローカル動画・音声に対応します。再生できる形式はブラウザに依存します。字幕の`track`やリンク先などは、ローカル参照の解決対象外です。
 > - 🔗アンカーリンクに対応していません。
+> - 🔗 `[別の文書](other.md)`などの相対リンクによる、選択フォルダ内の文書への移動には対応していません。Web版では公開ページのURLを基準に解決されるため、意図しないページへの移動や404になる場合があります。別のMarkdownファイルは画面上部のセレクトボックスから選択してください。
+
+Markdownの変換・描画はブラウザ内で行い、本ツールにはMarkdown本文や選択フォルダ内のファイルをサーバーへアップロードする処理はありません。ただし、外部ライブラリ・スタイルシート・フォントの取得時にはCDNへ、文書内の外部画像・動画・音声などの読み込み時には各配信元へ通信します。配信元にはIPアドレスやアクセス時刻、リクエストしたURLなどが伝わり、文書固有のURLから閲覧が識別される場合があります。DOMPurifyによるサニタイズは、これらの通信を遮断するものではありません。Web版・Download版とも、ローカル処理であることは外部通信がないことを意味しません。
 
 ### 動作環境
 - デスクトップ版のGoogle ChromeまたはMicrosoft Edgeの最新版を推奨します。
@@ -65,16 +70,19 @@ Web版とDownload版があり、どちらも機能に差はありません。
 | [DOMPurify](https://github.com/cure53/DOMPurify)           | 3.4.14      | Markdownから生成したHTMLをサニタイズ       |
 | [Highlight.js](https://highlightjs.org/)                   | 11.11.1     | 言語指定付きコードブロックの構文ハイライト |
 | [Mermaid](https://mermaid.js.org/)                         | 11.16.0     | Mermaidコードブロックを図として描画        |
-| [KaTeX](https://katex.org/)                                | 0.16.0      | インライン数式・ブロック数式を描画         |
+| [KaTeX](https://katex.org/)                                | 0.18.7      | インライン数式・ブロック数式を描画         |
 | [Markdown-CSS](https://github.com/Star-Delta/Markdown-CSS) | 0           | Markdownの画面表示・印刷用スタイルを適用   |
 
 ### Marked
 
-MarkdownをHTMLへ変換します。HTML生成前に画像参照を処理し、コードブロックの変換をMermaid用に拡張しています。
+MarkdownをHTMLへ変換します。コードブロックの変換をMermaid用に拡張し、画像・動画・音声の参照はHTML生成・サニタイズ後に処理します。
 
-- Markdown記法のローカル画像は、表示中のMarkdownファイルの位置を基準に解決します。先頭が`/`のパスは選択フォルダを基準とし、選択フォルダより上の階層は参照できません。HTMLの`<img>`はこの処理の対象外です。
+- Markdown記法（リスト・表の内部を含む）とHTMLの`<img src="…">`によるローカル画像は、表示中のMarkdownファイルの位置を基準に解決します。先頭が`/`のパスは選択フォルダを基準とし、選択フォルダより上の階層は参照できません。
+- Web版・Download版とも、解決できない画像参照は表示前に除去し、代替テキストと「画像が見つかりません」を表示します。ツールのHTMLの保存場所や公開URLを基準とした再読み込みは行いません。代替テキストがなければメッセージのみを表示します。
+- HTMLの`video src`・`audio src`、それらの直下にある`source src`、`video poster`も同じ起点で解決します。未解決の属性や候補は表示前に除去し、プレーヤーの隣に参照先が見つからない旨を表示します。ほかの有効な候補は残します。
+- 明示的な外部画像・動画・音声のURLは引き続き利用できます。外部リソースの読み込み時には配信元への通信が発生します。
 - 言語指定が`mermaid`のコードブロックは、通常のコード表示ではなくMermaid用の要素へ変換します。それ以外のコードブロックはMarkedの標準処理に任せます。
-- 生成したHTMLは、そのまま表示せずDOMPurifyでサニタイズします。ローカル画像はサニタイズ後に、ツールが生成したBlob URLを設定して表示します。
+- 生成したHTMLは、そのまま表示せずDOMPurifyでサニタイズします。ローカル画像・動画・音声はサニタイズ後に、ツールが生成したBlob URLを設定して表示します。
 - 表示後のリンクには`target="_blank"`と`rel="noopener noreferrer"`を設定します。
 
 ### DOMPurify
@@ -82,17 +90,21 @@ Markdownに直接記載されたHTMLタグとそれらに指定された属性�
 
 | HTML | 削除対象                                                                                                          |
 | ---- | ----------------------------------------------------------------------------------------------------------------- |
-| タグ | `style`, `template`, [tags.ts](https://github.com/cure53/DOMPurify/blob/3.4.14/src/tags.ts)に記載されていないもの |
-| 属性 | `style`, [attrs.ts](https://github.com/cure53/DOMPurify/blob/3.4.14/src/attrs.ts)に記載されていないもの           |
+| タグ | `style`, `template`, `form`, `button`, `select`, `textarea`, [tags.ts](https://github.com/cure53/DOMPurify/blob/3.4.14/src/tags.ts)に記載されていないもの |
+| 属性 | `style`, `srcset`, [attrs.ts](https://github.com/cure53/DOMPurify/blob/3.4.14/src/attrs.ts)に記載されていないもの           |
 
 Markedが生成したHTMLから危険な要素・属性・URLを除去してから、プレビューへ挿入します。[公式の設定説明](https://github.com/cure53/DOMPurify#can-i-configure-dompurify)に基づき、次の設定を適用しています。
 
 | 設定                   | 本ツールでの指定        | 表示への影響                                                                      |
 | ---------------------- | ----------------------- | --------------------------------------------------------------------------------- |
 | `USE_PROFILES`         | `{ html: true }`        | Markdown内に直接記述されたSVG・MathMLは許可せず、HTML用の許可リストを使用します。 |
-| `FORBID_TAGS`          | `['style', 'template']` | スタイル定義とテンプレート要素を除去します。                                      |
-| `FORBID_ATTR`          | `['style']`             | HTML要素に直接指定したスタイルを除去します。                                      |
+| `FORBID_TAGS`          | `['style', 'template', 'form', 'button', 'select', 'textarea']` | スタイル定義・テンプレート要素と、フォーム・ボタン・選択欄・テキスト入力欄のタグを除去します。 |
+| `FORBID_ATTR`          | `['style', 'srcset']`   | インラインスタイルと画像候補の指定を除去します。                                      |
 | `SANITIZE_NAMED_PROPS` | `true`                  | `id`・`name`に`user-content-`接頭辞を付け、ツール側のDOM参照との衝突を防ぎます。  |
+
+`srcset`はローカル・外部画像を問わず除去します。`<picture>`内の`<source srcset="…">`による候補指定も無効となり、`<img src="…">`のみを使用します。
+
+`input`の制限は追加していないため、Markdownのタスクリスト用チェックボックスは維持されます。除去するタグ内のテキストなどは、DOMPurifyの規則に従って残る場合があります。
 
 構文ハイライト・数式・Mermaid図はサニタイズ後に各ライブラリで生成します。Markdownに直接書いたSVG・MathMLの制限は、これらの描画結果を禁止するものではありません。
 
