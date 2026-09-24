@@ -24,13 +24,12 @@ Webブラウザ上でローカルのMarkdownファイル（`.md`、`.markdown`�
 - 📁 選択したフォルダとサブフォルダ内のMarkdownファイルを読み込み
 - 📑 セレクトボックスで複数Markdownファイルを切り替え
 - 🔄 ファイル更新を1秒ごとに検出して自動反映
+- 🌙 OSやブラウザの設定に応じたダークモード表示
+- 🖨 Markdown用の印刷スタイルを適用し、操作欄を自動的に非表示
 - 🛡 DOMPurifyにより、Markdown内のHTMLから危険な要素・属性・URLを除去
-  - 🔒 `style`、`template`、SVG、MathMLや危険な属性・URLなどは表示に反映されません。
 - 🧠 Mermaid.js コードブロック描画に対応
 - 🎨 言語を指定したコードブロックをHighlight.jsで色分け（ライト・ダーク表示に追従し、印刷はライト配色）
 - 📐 KaTeXによるインライン数式・ブロック数式の描画に対応
-- 🌙 OSやブラウザの設定に応じたダークモード表示
-- 🖨 Markdown用の印刷スタイルを適用し、操作欄を自動的に非表示
 
 > [!Warning]
 > **現時点の制限事項・既知の非対応**
@@ -40,15 +39,16 @@ Webブラウザ上でローカルのMarkdownファイル（`.md`、`.markdown`�
 > - 🔗アンカーリンクに対応していません。
 > - 🔗 `[別の文書](other.md)`などの相対リンクによる、選択フォルダ内の文書への移動には対応していません。Web版では公開ページのURLを基準に解決されるため、意図しないページへの移動や404になる場合があります。別のMarkdownファイルは画面上部のセレクトボックスから選択してください。
 
-Markdownの変換・描画はブラウザ内で行い、本ツールにはMarkdown本文や選択フォルダ内のファイルをサーバーへアップロードする処理はありません。ただし、外部ライブラリ・スタイルシート・フォントの取得時にはCDNへ、文書内の外部画像・動画・音声などの読み込み時には各配信元へ通信します。配信元にはIPアドレスやアクセス時刻、リクエストしたURLなどが伝わり、文書固有のURLから閲覧が識別される場合があります。DOMPurifyによるサニタイズは、これらの通信を遮断するものではありません。Web版・Download版とも、ローカル処理であることは外部通信がないことを意味しません。
+Markdownの変換・描画はブラウザ内で行い、本ツールにはMarkdown本文や選択フォルダ内のファイルをサーバーへアップロードする処理はありません。  
 
 ### 動作環境
-- デスクトップ版のGoogle ChromeまたはMicrosoft Edgeの最新版を推奨します。
-- フォルダの選択と読み込みに[File System Access API（`showDirectoryPicker`）](https://developer.mozilla.org/ja/docs/Web/API/Window/showDirectoryPicker)を使用します。このAPIはChrome 86およびEdge 86以降で利用できますが、本ツール全体としてこれらのバージョンまでの動作を保証するものではありません。
-- FirefoxおよびSafariは、必要な`showDirectoryPicker`に対応していないため対象外です。その他のChromium系ブラウザでも動作する可能性がありますが、動作確認は行っていません。
-- `Markdown_Preview.html`をローカルファイルとして直接開いて使用します。ブラウザや端末のセキュリティ設定、組織の管理ポリシーなどにより、JavaScriptの実行やローカルフォルダの読み込みが制限される場合があります。
-- 外部ライブラリとスタイルシートをCDNから読み込むため、インターネット接続が必要です。
-- フォルダの読み込み時にブラウザの許可が必要です。本ツールは選択されたフォルダ内のファイルを読み取りますが、ファイルの書き込みは行いません。
+#### 【必須】File System Access API（`showDirectoryPicker`）
+フォルダの選択と読み込みに[File System Access API（`showDirectoryPicker`）](https://developer.mozilla.org/ja/docs/Web/API/Window/showDirectoryPicker)を使用します。  
+対応しているブラウザについては[こちら](https://developer.mozilla.org/ja/docs/Web/API/Window/showDirectoryPicker)からご確認ください。  
+尚、本ツールは選択されたフォルダ内のファイルを読み取りますが、ファイルの書き込みは行いません。  
+
+当ツールの動作確認はデスクトップ版Chromeにて実施しております。  
+その他のブラウザの動作については保証いたしません。
 
 ## 使用方法
 Web版とDownload版があり、どちらも機能に差はありません。
