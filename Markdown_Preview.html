@@ -38,6 +38,9 @@
       }
     }
     #file-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.25em;
       position: sticky;
       top: 0;
       z-index: 999;
@@ -59,10 +62,7 @@
       cursor: pointer;
     }
     #info-button {
-      position: absolute;
-      top: 0.2em;
-      right: 0.2em;
-      z-index: 1001;
+      margin-left: auto;
     }
     #info-close {
       position: absolute;
@@ -108,6 +108,7 @@
 
     /* 印刷時は操作ボタンやモーダルを出力しない */
     @media print {
+      #file-controls,
       .Hidden_when_printing {
         display: none;
       }
