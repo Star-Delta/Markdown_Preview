@@ -4,8 +4,9 @@
   <meta charset="UTF-8" />
   <title>Markdown_Preview</title>
 
-  <!-- Markdownの変換・サニタイズ・構文ハイライト・Mermaid図の描画 -->
+  <!-- Markdownの変換・アラート・サニタイズ・構文ハイライト・Mermaid図の描画 -->
   <script src="https://cdn.jsdelivr.net/npm/marked@18.0.7/lib/marked.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked-alert@2.1.2/dist/index.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.14/dist/purify.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/powershell.min.js"></script>
@@ -25,6 +26,46 @@
       padding: 0;
       overflow: visible;
       background: transparent;
+    }
+
+    /* アラートは本文の色を保ち、種類名・左罫線・薄い背景で区別する。 */
+    #preview .markdown-alert {
+      margin-block: 1em;
+      padding: 0.75em 1em;
+      border-inline-start: 0.25em solid var(--alert-color);
+      background-color: color-mix(in srgb, var(--alert-color) 6%, var(--color-background, white));
+    }
+    #preview .markdown-alert > .markdown-alert-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      margin-block: 0 0.5em;
+      color: var(--alert-color);
+      font-weight: bold;
+    }
+    #preview .markdown-alert-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 1.25em;
+      font-size: 1em;
+      line-height: 1.5;
+    }
+    #preview .markdown-alert > :last-child {
+      margin-block-end: 0;
+    }
+    #preview .markdown-alert-note      { --alert-color: #0969da; }
+    #preview .markdown-alert-tip       { --alert-color: #1a7f37; }
+    #preview .markdown-alert-important { --alert-color: #8250df; }
+    #preview .markdown-alert-warning   { --alert-color: #9a6700; }
+    #preview .markdown-alert-caution   { --alert-color: #cf222e; }
+    /* 印刷にはライト配色を使い、長いアラートの改ページを妨げない。 */
+    @media screen and (prefers-color-scheme: dark) {
+      #preview .markdown-alert-note      { --alert-color: #58a6ff; }
+      #preview .markdown-alert-tip       { --alert-color: #3fb950; }
+      #preview .markdown-alert-important { --alert-color: #a371f7; }
+      #preview .markdown-alert-warning   { --alert-color: #d29922; }
+      #preview .markdown-alert-caution   { --alert-color: #f85149; }
     }
 
     /* 操作欄と情報モーダルのレイアウト */
@@ -185,7 +226,7 @@
         resourceObjectUrls: new Set()
       };
       const libraries = {
-        convertMarkdown: configureMarkdownRenderer(browserWindow.marked),
+        convertMarkdown: configureMarkdownRenderer(browserWindow.marked, browserWindow.markedAlert),
         sanitizer: browserWindow.DOMPurify,
         highlighter: browserWindow.hljs,
         mathRenderer: browserWindow.renderMathInElement,
@@ -336,12 +377,25 @@
     }
 
     /**
-     * MarkedへMermaid用の変換処理を登録し、HTMLと図の元テキストを返す関数を作る。
+     * MarkedへアラートとMermaid用の変換処理を登録し、HTMLと図の元テキストを返す。
      * Markedのコールバックには保存先を引数で渡せないため、ここだけ共有する。
      * 図の元テキストはHTMLへ埋め込まず、サニタイズ後にtextContentで復元する。
      */
-    function configureMarkdownRenderer(markdownParser) {
+    function configureMarkdownRenderer(markdownParser, alertExtension) {
       let activeMermaidSources = null;
+      // 判定は拡張の標準に任せる。固定の絵文字も生成HTMLと一緒にサニタイズする。
+      // 拡張の読み込みに失敗した場合は、通常の引用表示を維持する。
+      if (typeof alertExtension === 'function') {
+        markdownParser.use(alertExtension({
+          variants: [
+            { type: 'note', icon: '<span class="markdown-alert-icon" aria-hidden="true">ℹ️</span>' },
+            { type: 'tip', icon: '<span class="markdown-alert-icon" aria-hidden="true">💡</span>' },
+            { type: 'important', icon: '<span class="markdown-alert-icon" aria-hidden="true">❗</span>' },
+            { type: 'warning', icon: '<span class="markdown-alert-icon" aria-hidden="true">⚠️</span>' },
+            { type: 'caution', icon: '<span class="markdown-alert-icon" aria-hidden="true">🛑</span>' }
+          ]
+        }));
+      }
       markdownParser.use({
         renderer: {
           code({ text, lang }) {
@@ -354,11 +408,11 @@
       });
 
       return function convertMarkdown(markdownText) {
-        const tokens = markdownParser.lexer(markdownText);
         const mermaidSources = [];
         activeMermaidSources = mermaidSources;
         try {
-          return { html: markdownParser.parser(tokens), mermaidSources };
+          // parseはトークン生成 → 拡張のwalkTokens → HTML生成まで実行する。
+          return { html: markdownParser.parse(markdownText), mermaidSources };
         } finally {
           // 変換が失敗しても、一時的な保存先を必ず解除する。
           activeMermaidSources = null;
