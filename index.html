@@ -4,21 +4,14 @@
   <meta charset="UTF-8" />
   <title>Markdown_Preview</title>
 
-  <!-- Markdownの変換・サニタイズ・構文ハイライト・Mermaid図の描画 -->
+  <!-- Markdownの変換・アラート・サニタイズ・構文ハイライト・Mermaid図の描画 -->
   <script src="https://cdn.jsdelivr.net/npm/marked@18.0.7/lib/marked.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/marked-alert@2.1.2/dist/index.umd.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.4.14/dist/purify.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/highlight.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/powershell.min.js"></script>
   <script src="https://cdn.jsdelivr.net/gh/highlightjs/cdn-release@11.11.1/build/languages/dos.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/mermaid@11.16.0/dist/mermaid.min.js"></script>
-  <script>
-    // 自動描画を無効にし、信頼できない図を厳格な設定で描画する。
-    mermaid.initialize({
-      startOnLoad: false,
-      securityLevel: 'strict',
-      theme: window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'default'
-    });
-  </script>
 
   <!-- Markdown用CSSの読み込み -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/Star-Delta/Markdown-CSS@0/Markdown.css">
@@ -35,6 +28,46 @@
       background: transparent;
     }
 
+    /* アラートは本文の色を保ち、種類名・左罫線・薄い背景で区別する。 */
+    #preview .markdown-alert {
+      margin-block: 1em;
+      padding: 0.75em 1em;
+      border-inline-start: 0.25em solid var(--alert-color);
+      background-color: color-mix(in srgb, var(--alert-color) 6%, var(--color-background, white));
+    }
+    #preview .markdown-alert > .markdown-alert-title {
+      display: flex;
+      align-items: center;
+      gap: 0.5em;
+      margin-block: 0 0.5em;
+      color: var(--alert-color);
+      font-weight: bold;
+    }
+    #preview .markdown-alert-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 1.25em;
+      font-size: 1em;
+      line-height: 1.5;
+    }
+    #preview .markdown-alert > :last-child {
+      margin-block-end: 0;
+    }
+    #preview .markdown-alert-note      { --alert-color: #0969da; }
+    #preview .markdown-alert-tip       { --alert-color: #1a7f37; }
+    #preview .markdown-alert-important { --alert-color: #8250df; }
+    #preview .markdown-alert-warning   { --alert-color: #9a6700; }
+    #preview .markdown-alert-caution   { --alert-color: #cf222e; }
+    /* 印刷にはライト配色を使い、長いアラートの改ページを妨げない。 */
+    @media screen and (prefers-color-scheme: dark) {
+      #preview .markdown-alert-note      { --alert-color: #58a6ff; }
+      #preview .markdown-alert-tip       { --alert-color: #3fb950; }
+      #preview .markdown-alert-important { --alert-color: #a371f7; }
+      #preview .markdown-alert-warning   { --alert-color: #d29922; }
+      #preview .markdown-alert-caution   { --alert-color: #f85149; }
+    }
+
     /* 操作欄と情報モーダルのレイアウト */
     body {
       font-family: sans-serif;
@@ -46,6 +79,9 @@
       }
     }
     #file-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.25em;
       position: sticky;
       top: 0;
       z-index: 999;
@@ -67,10 +103,7 @@
       cursor: pointer;
     }
     #info-button {
-      position: absolute;
-      top: 0.2em;
-      right: 0.2em;
-      z-index: 1001;
+      margin-left: auto;
     }
     #info-close {
       position: absolute;
@@ -116,6 +149,7 @@
 
     /* 印刷時は操作ボタンやモーダルを出力しない */
     @media print {
+      #file-controls,
       .Hidden_when_printing {
         display: none;
       }
@@ -146,53 +180,373 @@
     <div class="info-content">
       <span id="info-close">&times;</span>
       <p>
-        <a href="https://github.com/Star-Delta/Markdown_Preview" target="_blank" rel="noopener noreferrer">Markdown_Preview</a>(開発者: <a href="https://github.com/Star-Delta" target="_blank" rel="noopener noreferrer">Star-Delta</a>)<br>
+        <a href="https://github.com/Star-Delta/Markdown_Preview" target="_blank" rel="noopener noreferrer">Markdown_Preview(v1.2.0)</a>(開発者: <a href="https://github.com/Star-Delta" target="_blank" rel="noopener noreferrer">Star-Delta</a>)<br>
         <a href="https://github.com/Star-Delta/Markdown_Preview/blob/Pages/README.md" target="_blank" rel="noopener noreferrer">使い方</a>/<a href="https://github.com/Star-Delta/Markdown_Preview/blob/Pages/LICENSE" target="_blank" rel="noopener noreferrer">ライセンス</a><br>
       </p>
     </div>
   </div>
 
   <script>
-    // 頻繁に参照する画面要素を保持する。
-    const openFolderBtn = document.getElementById('open-folder');
-    const fileSelect = document.getElementById('file-select');
-    const preview = document.getElementById('preview');
+    /*
+     * 読む順序: main → 操作・更新確認 → 描画 → 個別処理 → 補助関数
+     *
+     * フォルダ選択 → ファイル収集 → 選択一覧・対応表を作成 → Markdown表示
+     * ファイル選択 → 表示対象を変更 → Markdown表示
+     * 自動更新     → 1秒ごとに更新日時を確認 → 変更時だけMarkdown表示
+     * Markdown表示 → HTML変換 → サニタイズ → ローカル参照の解決
+     *              → 画面へ反映 → コード・数式・Mermaid図を描画
+     *
+     * 通常の処理関数は必要な値を引数で受け取る。
+     * クロージャ（外側の変数を保持する関数）は、起動時の接続・イベント登録と
+     * Markedのコールバックに限定する。DOMや状態を変更する関数はコメントで示す。
+     * document・windowなどのブラウザ機能はmainで受け取り、必要な処理へ渡す。
+     */
 
-    let mdHandle = null;       // 現在プレビューしているMarkdownファイルのハンドル
-    let mdPath = '';           // 現在プレビューしているMarkdownの選択フォルダからの相対パス
-    let fileMap = new Map();   // Markdownから参照する画像等の相対パスとFileの対応表
-    const resourceObjectUrls = new Set(); // 現在のプレビューで使用している画像・動画・音声のBlob URL
-    let lastModified = 0;      // 最後に描画したファイルの更新日時（不要な再描画を防ぐ）
+    // ── 起動処理 ──
 
-    // Markdown由来のHTMLはHTML要素だけを許可し、画面改変やDOM参照への干渉を防ぐ。
-    const sanitizeConfig = {
-      USE_PROFILES: { html: true },
-      FORBID_TAGS: ['style', 'template', 'form', 'button', 'select', 'textarea'],
-      FORBID_ATTR: ['style', 'srcset'],
-      SANITIZE_NAMED_PROPS: true
-    };
-    let activeMermaidSources = null;
+    /** 画面・状態・ライブラリを準備し、操作と定期更新を登録する。 */
+    function main(pageDocument, browserWindow) {
+      const controls = {
+        openFolderButton: pageDocument.getElementById('open-folder'),
+        fileSelect: pageDocument.getElementById('file-select'),
+        infoButton: pageDocument.getElementById('info-button'),
+        infoCloseButton: pageDocument.getElementById('info-close'),
+        infoModal: pageDocument.getElementById('info-modal')
+      };
+      const previewElement = pageDocument.getElementById('preview');
 
-    // MermaidソースはHTMLへ埋め込まず、サニタイズ後に復元するため配列へ退避する。
-    marked.use({
-      renderer: {
-        code({ text, lang }) {
-          if (lang?.trim().toLowerCase() !== 'mermaid') return false;
-          if (!activeMermaidSources) return false;
+      // handleはファイルを再取得するための参照。Fileは取得時点のファイル情報。
+      // stateは選択と更新確認に必要な状態。描画関数には必要な項目だけを渡す。
+      const state = {
+        markdownFiles: [],
+        selectedMarkdownHandle: null,
+        selectedMarkdownPath: '',
+        lastRenderedModifiedTime: 0,
+        filesByRelativePath: new Map(),
+        resourceObjectUrls: new Set()
+      };
+      const libraries = {
+        convertMarkdown: configureMarkdownRenderer(browserWindow.marked, browserWindow.markedAlert),
+        sanitizer: browserWindow.DOMPurify,
+        highlighter: browserWindow.hljs,
+        mathRenderer: browserWindow.renderMathInElement,
+        mermaidRenderer: browserWindow.mermaid
+      };
 
-          const sourceIndex = activeMermaidSources.push(text) - 1;
-          return `<pre class="mermaid" data-mermaid-source="${sourceIndex}"></pre>`;
+      // HTML要素だけを許可し、画面改変やDOM参照への干渉を防ぐ。
+      const sanitizeConfig = {
+        USE_PROFILES: { html: true },
+        FORBID_TAGS: ['style', 'template', 'form', 'button', 'select', 'textarea'],
+        FORBID_ATTR: ['style', 'srcset'],
+        SANITIZE_NAMED_PROPS: true
+      };
+
+      initializeMermaid(libraries.mermaidRenderer,
+        browserWindow.matchMedia('(prefers-color-scheme: dark)').matches);
+
+      // 起動時に固定される表示先・設定を接続する。選択中の値は毎回引数で受け取る。
+      const renderPreview = (markdownText, markdownPath, filesByRelativePath, resourceObjectUrls) =>
+        renderMarkdown(markdownText, previewElement, markdownPath,
+          filesByRelativePath, resourceObjectUrls, libraries, sanitizeConfig);
+
+      registerEventHandlers(controls, state, renderPreview, browserWindow);
+      startFileWatching(state, renderPreview, browserWindow);
+    }
+
+    // ── 操作・更新確認 ──
+
+    /** 操作を一度だけ登録する。コールバックは引数を保持し、処理関数へ渡す。 */
+    function registerEventHandlers(controls, state, renderPreview, browserWindow) {
+      controls.openFolderButton.addEventListener('click', () =>
+        handleFolderSelection(controls.openFolderButton, controls.fileSelect,
+          state, renderPreview, browserWindow));
+      controls.fileSelect.addEventListener('change', () =>
+        handleMarkdownSelection(controls.fileSelect, state, renderPreview));
+      controls.infoButton.addEventListener('click', () =>
+        setInfoModalVisible(controls.infoModal, true));
+      controls.infoCloseButton.addEventListener('click', () =>
+        setInfoModalVisible(controls.infoModal, false));
+      browserWindow.addEventListener('click', event => {
+        if (event.target === controls.infoModal) {
+          setInfoModalVisible(controls.infoModal, false);
         }
+      });
+    }
+
+    /** 外部エディタでの保存を検知するため、1秒ごとに更新日時を確認する。 */
+    function startFileWatching(state, renderPreview, browserWindow) {
+      browserWindow.setInterval(() => updatePreviewIfChanged(state, renderPreview), 1000);
+    }
+
+    /** フォルダを読み込み、stateと操作欄を更新する。初期表示は先頭のMarkdown。 */
+    async function handleFolderSelection(openFolderButton, fileSelect, state, renderPreview, browserWindow) {
+      if (!browserWindow.showDirectoryPicker) {
+        browserWindow.alert('このブラウザは File System Access API に対応していません。');
+        return;
       }
-    });
+
+      try {
+        const directoryHandle = await browserWindow.showDirectoryPicker();
+        openFolderButton.textContent = `📁 ${directoryHandle.name}`;
+        const entries = await getFilesRecursively(directoryHandle);
+        const markdownFiles = entries.filter(entry => /\.(md|markdown)$/i.test(entry.path));
+        if (markdownFiles.length === 0) {
+          browserWindow.alert('.md または .markdown ファイルが見つかりません。');
+          return;
+        }
+
+        // 対応表の作成が成功してから、新しいフォルダの状態と一覧へ切り替える。
+        const filesByRelativePath = await collectFilesByRelativePath(entries);
+        state.markdownFiles = markdownFiles;
+        state.filesByRelativePath = filesByRelativePath;
+        populateMarkdownOptions(fileSelect, markdownFiles);
+        await selectMarkdown(markdownFiles[0], state, renderPreview);
+      } catch (error) {
+        console.error(error);
+        browserWindow.alert('フォルダの読み込みに失敗しました。');
+      }
+    }
+
+    /** プルダウンで選択されたMarkdownを表示する。 */
+    async function handleMarkdownSelection(fileSelect, state, renderPreview) {
+      const selected = state.markdownFiles[Number.parseInt(fileSelect.value, 10)];
+      if (!selected) return;
+      await selectMarkdown(selected, state, renderPreview);
+    }
+
+    /** stateの表示対象と更新日時を変更し、選択したファイルを即時描画する。 */
+    async function selectMarkdown(selected, state, renderPreview) {
+      state.selectedMarkdownHandle = selected.handle;
+      state.selectedMarkdownPath = selected.path;
+      state.lastRenderedModifiedTime = 0;
+      await updatePreviewIfChanged(state, renderPreview);
+    }
 
     /**
-     * 選択されたフォルダ以下を再帰的に走査し、全ファイルを収集する。
-     * pathは選択フォルダを基準とした相対パスとして引き継ぐ。
+     * 選択中ファイルに変更があれば描画し、stateの更新日時を変更する。
+     * 定期確認からも呼ばれるため、読み取り・描画の失敗はログへ記録する。
+     * async/awaitは、ファイル読み取りや描画が完了するまで待つために使う。
      */
-    async function getFilesRecursively(dirHandle, path = '') {
+    async function updatePreviewIfChanged(state, renderPreview) {
+      if (!state.selectedMarkdownHandle) return;
+      try {
+        const file = await state.selectedMarkdownHandle.getFile();
+        if (file.lastModified === state.lastRenderedModifiedTime) return;
+        state.lastRenderedModifiedTime = file.lastModified;
+        const markdownText = await file.text();
+        await renderPreview(markdownText, state.selectedMarkdownPath,
+          state.filesByRelativePath, state.resourceObjectUrls);
+      } catch (error) {
+        console.error('更新失敗:', error);
+      }
+    }
+
+    // ── Markdown描画の手順 ──
+
+    /**
+     * プレビュー要素とURL管理用Setを変更する。ライブラリと設定は読み取り専用。
+     * サニタイズ → アプリ生成のBlob URLを設定 → 画面へ挿入、の順序を維持する。
+     */
+    async function renderMarkdown(markdownText, previewElement, markdownPath,
+        filesByRelativePath, resourceObjectUrls, libraries, sanitizeConfig) {
+      revokeResourceObjectUrls(resourceObjectUrls);
+      const { html, mermaidSources } = libraries.convertMarkdown(markdownText);
+      const fragment = createSanitizedFragment(html, libraries.sanitizer,
+        sanitizeConfig, previewElement.ownerDocument);
+
+      resolveLocalImages(fragment, markdownPath, filesByRelativePath, resourceObjectUrls);
+      resolveLocalMedia(fragment, markdownPath, filesByRelativePath, resourceObjectUrls);
+      previewElement.replaceChildren(fragment);
+
+      restoreMermaidSources(previewElement, mermaidSources);
+      highlightCodeBlocks(previewElement, libraries.highlighter);
+      renderMath(previewElement, libraries.mathRenderer);
+      configurePreviewLinks(previewElement);
+      await renderMermaid(previewElement, libraries.mermaidRenderer);
+    }
+
+    // ── ライブラリ設定・個別の描画処理 ──
+
+    /** Mermaidの自動描画を無効にし、信頼できない図を厳格な設定で描画する。 */
+    function initializeMermaid(mermaidRenderer, prefersDarkMode) {
+      mermaidRenderer.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme: prefersDarkMode ? 'dark' : 'default'
+      });
+    }
+
+    /**
+     * MarkedへアラートとMermaid用の変換処理を登録し、HTMLと図の元テキストを返す。
+     * Markedのコールバックには保存先を引数で渡せないため、ここだけ共有する。
+     * 図の元テキストはHTMLへ埋め込まず、サニタイズ後にtextContentで復元する。
+     */
+    function configureMarkdownRenderer(markdownParser, alertExtension) {
+      let activeMermaidSources = null;
+      // 判定は拡張の標準に任せる。固定の絵文字も生成HTMLと一緒にサニタイズする。
+      // 拡張の読み込みに失敗した場合は、通常の引用表示を維持する。
+      if (typeof alertExtension === 'function') {
+        markdownParser.use(alertExtension({
+          variants: [
+            { type: 'note', icon: '<span class="markdown-alert-icon" aria-hidden="true">ℹ️</span>' },
+            { type: 'tip', icon: '<span class="markdown-alert-icon" aria-hidden="true">💡</span>' },
+            { type: 'important', icon: '<span class="markdown-alert-icon" aria-hidden="true">❗</span>' },
+            { type: 'warning', icon: '<span class="markdown-alert-icon" aria-hidden="true">⚠️</span>' },
+            { type: 'caution', icon: '<span class="markdown-alert-icon" aria-hidden="true">🛑</span>' }
+          ]
+        }));
+      }
+      markdownParser.use({
+        renderer: {
+          code({ text, lang }) {
+            if (lang?.trim().toLowerCase() !== 'mermaid') return false;
+            if (!activeMermaidSources) return false;
+            const sourceIndex = activeMermaidSources.push(text) - 1;
+            return `<pre class="mermaid" data-mermaid-source="${sourceIndex}"></pre>`;
+          }
+        }
+      });
+
+      return function convertMarkdown(markdownText) {
+        const mermaidSources = [];
+        activeMermaidSources = mermaidSources;
+        try {
+          // parseはトークン生成 → 拡張のwalkTokens → HTML生成まで実行する。
+          return { html: markdownParser.parse(markdownText), mermaidSources };
+        } finally {
+          // 変換が失敗しても、一時的な保存先を必ず解除する。
+          activeMermaidSources = null;
+        }
+      };
+    }
+
+    /** 危険なHTMLを除去し、まだ画面へ挿入していないDocumentFragmentを返す。 */
+    function createSanitizedFragment(html, sanitizer, sanitizeConfig, pageDocument) {
+      const cleanHtml = sanitizer.sanitize(html, sanitizeConfig);
+      const template = pageDocument.createElement('template');
+      template.innerHTML = cleanHtml;
+      return template.content;
+    }
+
+    /** 一時DOMの画像参照とURL管理用Setを変更し、未解決の画像を説明へ置換する。 */
+    function resolveLocalImages(fragment, markdownPath, filesByRelativePath, resourceObjectUrls) {
+      // サニタイズ済みの全imgを処理し、リスト・表・HTML記法も同じ規則で解決する。
+      // 未解決の参照は画面へ挿入する前に除去し、ツールのURLを基準に読み込ませない。
+      for (const image of fragment.querySelectorAll('img')) {
+        if (!resolveResourceAttribute(image, 'src', markdownPath, filesByRelativePath, resourceObjectUrls)) {
+          const fallback = image.ownerDocument.createElement('span');
+          const alt = image.getAttribute('alt');
+          fallback.textContent = alt ? `${alt}（画像が見つかりません）` : '画像が見つかりません';
+          image.replaceWith(fallback);
+        }
+      }
+    }
+
+    /** 一時DOMのメディア参照とURL管理用Setを変更し、未解決の参照を除去する。 */
+    function resolveLocalMedia(fragment, markdownPath, filesByRelativePath, resourceObjectUrls) {
+      // 動画・音声本体、直下の候補、動画のポスターも表示前に確認する。
+      for (const media of fragment.querySelectorAll('video, audio')) {
+        const missing = new Set();
+        const label = media.localName === 'video' ? '動画' : '音声';
+        if (media.hasAttribute('src') && !resolveResourceAttribute(media, 'src', markdownPath, filesByRelativePath, resourceObjectUrls)) {
+          missing.add(label);
+        }
+        for (const source of media.querySelectorAll(':scope > source')) {
+          if (!resolveResourceAttribute(source, 'src', markdownPath, filesByRelativePath, resourceObjectUrls)) {
+            source.remove();
+            missing.add(label);
+          }
+        }
+        if (media.localName === 'video' && media.hasAttribute('poster') &&
+            !resolveResourceAttribute(media, 'poster', markdownPath, filesByRelativePath, resourceObjectUrls)) {
+          missing.add('ポスター画像');
+        }
+        if (missing.size > 0) {
+          const fallback = media.ownerDocument.createElement('span');
+          fallback.textContent = `（${Array.from(missing).join('・')}の参照先が見つかりません）`;
+          media.after(fallback);
+        }
+      }
+    }
+
+    /** プレビュー内のMermaid要素へ元テキストを復元する。配列は変更しない。 */
+    function restoreMermaidSources(previewElement, mermaidSources) {
+      // MermaidソースをHTMLとして解釈させず、専用要素のテキストとして復元する。
+      for (const element of previewElement.querySelectorAll('.mermaid[data-mermaid-source]')) {
+        const sourceIndex = Number(element.getAttribute('data-mermaid-source'));
+        if (Number.isInteger(sourceIndex) && mermaidSources[sourceIndex] !== undefined) {
+          element.textContent = mermaidSources[sourceIndex];
+        }
+        element.removeAttribute('data-mermaid-source');
+      }
+    }
+
+    /** 明示された対応言語だけを強調し、未指定・未対応のコードはそのまま表示する。 */
+    function highlightCodeBlocks(previewElement, highlighter) {
+      if (!highlighter || typeof highlighter.highlightElement !== 'function') return;
+
+      for (const code of previewElement.querySelectorAll('pre code')) {
+        if (code.closest('.mermaid, .nohighlight, .no-highlight')) continue;
+        // HTMLで直接記述された子要素や、処理済みのコードには触れない。
+        if (code.childElementCount > 0 || code.hasAttribute('data-highlighted')) continue;
+
+        const languageClass = Array.from(code.classList).find(name => /^language-/i.test(name));
+        if (!languageClass) continue;
+        const language = languageClass.slice('language-'.length).toLowerCase();
+        if (['mermaid', 'text', 'txt', 'plaintext', 'nohighlight', 'no-highlight'].includes(language)) continue;
+
+        const source = code.textContent;
+        const originalClass = code.className;
+        try {
+          if (!highlighter.getLanguage(language)) continue;
+          highlighter.highlightElement(code);
+        } catch (err) {
+          // 個別のハイライト失敗で、後続の数式やMermaidの描画を止めない。
+          code.textContent = source;
+          code.className = originalClass;
+          code.removeAttribute('data-highlighted');
+          console.warn('コードのハイライトに失敗しました:', language, err);
+        }
+      }
+    }
+
+    /** 渡されたプレビュー領域だけを対象に、KaTeXで数式を描画する。 */
+    function renderMath(previewElement, mathRenderer) {
+      // 生成したプレビュー領域だけを対象にKaTeXで数式を描画する。
+      mathRenderer(previewElement, {
+        delimiters: [
+          {left: "$$", right: "$$", display: true},
+          {left: "$", right: "$", display: false},
+          {left: "\\(", right: "\\)", display: false},
+          {left: "\\[", right: "\\]", display: true}
+        ],
+        trust: false,
+        throwOnError: false
+      });
+    }
+
+    /** プレビュー内のリンク属性を変更し、新しいタブで安全に開くようにする。 */
+    function configurePreviewLinks(previewElement) {
+      for (const link of previewElement.querySelectorAll('a[href]')) {
+        link.setAttribute('target', '_blank');
+        link.setAttribute('rel', 'noopener noreferrer');
+      }
+    }
+
+    /** 画面へ挿入済みのMermaid要素を図へ置き換える。完了を待てるPromiseを返す。 */
+    async function renderMermaid(previewElement, mermaidRenderer) {
+      await mermaidRenderer.run({ nodes: previewElement.querySelectorAll('.mermaid') });
+    }
+
+    // ── ファイル収集・画面操作の補助 ──
+
+    /**
+     * 選択フォルダ以下を再帰的に走査し、{ handle, path }の配列を返す。
+     * pathは選択フォルダを基準とした相対パス。ファイルへの書き込みは行わない。
+     */
+    async function getFilesRecursively(directoryHandle, path = '') {
       const files = [];
-      for await (const entry of dirHandle.values()) {
+      for await (const entry of directoryHandle.values()) {
         if (entry.kind === 'file') {
           files.push({ handle: entry, path: path + entry.name });
         } else if (entry.kind === 'directory') {
@@ -202,6 +556,33 @@
       }
       return files;
     }
+
+    /** 相対パスをキー、取得したFileを値とする新しいMapを返す。入力は変更しない。 */
+    async function collectFilesByRelativePath(entries) {
+      const filesByRelativePath = new Map();
+      for (const { handle, path } of entries) {
+        filesByRelativePath.set(path, await handle.getFile());
+      }
+      return filesByRelativePath;
+    }
+
+    /** 選択一覧のDOMを作り直す。値にはmarkdownFiles配列の添字を使用する。 */
+    function populateMarkdownOptions(fileSelect, markdownFiles) {
+      fileSelect.replaceChildren();
+      markdownFiles.forEach(({ path }, index) => {
+        const option = fileSelect.ownerDocument.createElement('option');
+        option.value = index;
+        option.textContent = path;
+        fileSelect.appendChild(option);
+      });
+    }
+
+    /** 情報モーダルの表示状態を変更する。 */
+    function setInfoModalVisible(infoModal, visible) {
+      infoModal.style.display = visible ? 'block' : 'none';
+    }
+
+    // ── URL・パスの補助 ──
 
     /** スキーム付きURLまたはプロトコル相対URLなら、ブラウザにそのまま解決させる。 */
     function isExternalUrl(path) {
@@ -231,7 +612,11 @@
       }
     }
 
-    /** Markdownの位置を基準に相対パスを解決し、選択フォルダ基準のパスを返す。 */
+    /**
+     * Markdownの位置を基準に相対パスを解決し、選択フォルダ基準のパスを返す。
+     * 例: docs/readme.md と ../images/sample.png → images/sample.png
+     * 選択フォルダの外へ出る場合はnullを返す。入力値は変更しない。
+     */
     function resolveRelativePath(markdownPath, relativePath) {
       // 先頭が「/」なら選択フォルダ、それ以外はMarkdownの親フォルダを基準にする。
       const resolvedSegments = relativePath.startsWith('/')
@@ -255,22 +640,26 @@
     }
 
     /** 前回のプレビューで生成した画像・動画・音声のBlob URLを破棄する。 */
-    function revokeResourceObjectUrls() {
+    function revokeResourceObjectUrls(resourceObjectUrls) {
       for (const url of resourceObjectUrls) {
         URL.revokeObjectURL(url);
       }
       resourceObjectUrls.clear();
     }
 
-    /** サニタイズ済み属性のローカル参照をBlob URLに置換し、未解決なら除去する。 */
-    function resolveResourceAttribute(element, attribute) {
+    /**
+     * サニタイズ済み属性の参照先を解決する。利用可能ならtrue、未解決ならfalse。
+     * elementの属性とresourceObjectUrlsを変更する。ファイル対応表は読み取り専用。
+     * Blob URLは取得したFileをブラウザで表示するためのURL。次回描画時に破棄する。
+     */
+    function resolveResourceAttribute(element, attribute, markdownPath, filesByRelativePath, resourceObjectUrls) {
       const source = (element.getAttribute(attribute) || '').trim().replace(/[\t\n\r]/g, '');
       if (source && isExternalUrl(source)) return true;
 
       const { pathname, fragment } = splitLocalResourceUrl(source);
       const decodedPath = safeDecodeURIComponent(pathname);
-      const resourcePath = decodedPath ? resolveRelativePath(mdPath, decodedPath) : null;
-      const file = resourcePath === null ? null : fileMap.get(resourcePath);
+      const resourcePath = decodedPath ? resolveRelativePath(markdownPath, decodedPath) : null;
+      const file = resourcePath === null ? null : filesByRelativePath.get(resourcePath);
 
       if (!file) {
         element.removeAttribute(attribute);
@@ -283,218 +672,9 @@
       return true;
     }
 
-    /** 明示された対応言語だけを強調し、未指定・未対応のコードはそのまま表示する。 */
-    function highlightCodeBlocks() {
-      const highlighter = window.hljs;
-      if (!highlighter || typeof highlighter.highlightElement !== 'function') return;
-
-      for (const code of preview.querySelectorAll('pre code')) {
-        if (code.closest('.mermaid, .nohighlight, .no-highlight')) continue;
-        // HTMLで直接記述された子要素や、処理済みのコードには触れない。
-        if (code.childElementCount > 0 || code.hasAttribute('data-highlighted')) continue;
-
-        const languageClass = Array.from(code.classList).find(name => /^language-/i.test(name));
-        if (!languageClass) continue;
-        const language = languageClass.slice('language-'.length).toLowerCase();
-        if (['mermaid', 'text', 'txt', 'plaintext', 'nohighlight', 'no-highlight'].includes(language)) continue;
-
-        const source = code.textContent;
-        const originalClass = code.className;
-        try {
-          if (!highlighter.getLanguage(language)) continue;
-          highlighter.highlightElement(code);
-        } catch (err) {
-          // 個別のハイライト失敗で、後続の数式やMermaidの描画を止めない。
-          code.textContent = source;
-          code.className = originalClass;
-          code.removeAttribute('data-highlighted');
-          console.warn('コードのハイライトに失敗しました:', language, err);
-        }
-      }
-    }
-
-    /** Markdown文字列をHTMLへ変換し、画像・メディア・コード・数式・Mermaid図を描画する。 */
-    async function renderMarkdown(text) {
-      // これからプレビューを置き換えるため、前回のリソースURLは不要になる。
-      revokeResourceObjectUrls();
-
-      const tokens = marked.lexer(text);
-      const mermaidSources = [];
-      activeMermaidSources = mermaidSources;
-
-      let html;
-      try {
-        html = marked.parser(tokens);
-      } finally {
-        activeMermaidSources = null;
-      }
-
-      const cleanHtml = DOMPurify.sanitize(html, sanitizeConfig);
-
-      // 実際の画面へ挿入する前の一時DOM上で、アプリが生成したBlob URLを設定する。
-      const template = document.createElement('template');
-      template.innerHTML = cleanHtml;
-
-      // サニタイズ済みの全imgを処理し、リスト・表・HTML記法も同じ規則で解決する。
-      // 未解決の参照は画面へ挿入する前に除去し、ツールのURLを基準に読み込ませない。
-      for (const image of template.content.querySelectorAll('img')) {
-        if (!resolveResourceAttribute(image, 'src')) {
-          const fallback = document.createElement('span');
-          const alt = image.getAttribute('alt');
-          fallback.textContent = alt ? `${alt}（画像が見つかりません）` : '画像が見つかりません';
-          image.replaceWith(fallback);
-        }
-      }
-
-      // 動画・音声本体、直下の候補、動画のポスターも表示前に確認する。
-      for (const media of template.content.querySelectorAll('video, audio')) {
-        const missing = new Set();
-        const label = media.localName === 'video' ? '動画' : '音声';
-        if (media.hasAttribute('src') && !resolveResourceAttribute(media, 'src')) {
-          missing.add(label);
-        }
-        for (const source of media.querySelectorAll(':scope > source')) {
-          if (!resolveResourceAttribute(source, 'src')) {
-            source.remove();
-            missing.add(label);
-          }
-        }
-        if (media.localName === 'video' && media.hasAttribute('poster') &&
-            !resolveResourceAttribute(media, 'poster')) {
-          missing.add('ポスター画像');
-        }
-        if (missing.size > 0) {
-          const fallback = document.createElement('span');
-          fallback.textContent = `（${Array.from(missing).join('・')}の参照先が見つかりません）`;
-          media.after(fallback);
-        }
-      }
-
-      preview.replaceChildren(template.content);
-
-      // MermaidソースをHTMLとして解釈させず、専用要素のテキストとして復元する。
-      for (const element of preview.querySelectorAll('.mermaid[data-mermaid-source]')) {
-        const sourceIndex = Number(element.getAttribute('data-mermaid-source'));
-        if (Number.isInteger(sourceIndex) && mermaidSources[sourceIndex] !== undefined) {
-          element.textContent = mermaidSources[sourceIndex];
-        }
-        element.removeAttribute('data-mermaid-source');
-      }
-
-      // サニタイズ済みのプレビューを対象に、再描画のたびにハイライトする。
-      highlightCodeBlocks();
-
-      // 生成したプレビュー領域だけを対象にKaTeXで数式を描画する。
-      renderMathInElement(preview, {
-        delimiters: [
-          {left: "$$", right: "$$", display: true},
-          {left: "$", right: "$", display: false},
-          {left: "\\(", right: "\\)", display: false},
-          {left: "\\[", right: "\\]", display: true}
-        ],
-        trust: false,
-        throwOnError: false
-      });
-
-
-      // リンクは新しいタブで開き、遷移先から元画面を操作できないようにする。
-      preview.querySelectorAll('a[href]').forEach(link => {
-        link.setAttribute('target', '_blank');
-        link.setAttribute('rel', 'noopener noreferrer');
-      });
-
-      // HTMLへの挿入が済んだ後でMermaid図を描画する。
-      await mermaid.run({
-        nodes: preview.querySelectorAll('.mermaid')
-      });
-    }
-
-    /**
-     * 選択中ファイルの更新日時を確認し、変更された場合だけ再描画する。
-     * setIntervalからも呼ばれるため、読み取り失敗は画面を止めずログへ記録する。
-     */
-    async function updatePreviewIfChanged() {
-      if (!mdHandle) return;
-      try {
-        const file = await mdHandle.getFile();
-        if (file.lastModified !== lastModified) {
-          lastModified = file.lastModified;
-          const text = await file.text();
-          await renderMarkdown(text);
-        }
-      } catch (err) {
-        console.error('更新失敗:', err);
-      }
-    }
-
-    // フォルダを選択し、Markdown一覧とローカルファイルの対応表を作成する。
-    openFolderBtn.addEventListener('click', async () => {
-      // File System Access APIは対応ブラウザでのみ利用できる。
-      if (!window.showDirectoryPicker) {
-        alert('このブラウザは File System Access API に対応していません。');
-        return;
-      }
-
-      try {
-        const dirHandle = await window.showDirectoryPicker();
-        openFolderBtn.textContent = `📁 ${dirHandle.name}`;
-
-        // サブフォルダを含む全ファイルから、選択候補となるMarkdownだけを抽出する。
-        const entries = await getFilesRecursively(dirHandle);
-        const mdFiles = entries.filter(e => /\.(md|markdown)$/i.test(e.path));
-        if (mdFiles.length === 0) return alert('.md または .markdown ファイルが見つかりません。');
-
-        fileSelect.innerHTML = '';
-        // プルダウンの値にはmdFiles配列の添字を使用する。
-        mdFiles.forEach(({ path }, i) => {
-          const opt = document.createElement('option');
-          opt.value = i;
-          opt.textContent = path;
-          fileSelect.appendChild(opt);
-        });
-
-        // 選択フォルダを基準とした相対パスで、画像等のファイルを検索できるようにする。
-        fileMap.clear();
-        for (const { handle, path } of entries) {
-          const file = await handle.getFile();
-          fileMap.set(path, file);
-        }
-
-        // 初期表示は一覧の先頭にあるMarkdownとする。
-        mdHandle = mdFiles[0].handle;
-        mdPath = mdFiles[0].path;
-        lastModified = 0;
-        await updatePreviewIfChanged();
-
-        // 選択が変わったら監視対象を差し替え、更新日時をリセットして即時描画する。
-        fileSelect.onchange = async () => {
-          const selected = mdFiles[parseInt(fileSelect.value)];
-          mdHandle = selected.handle;
-          mdPath = selected.path;
-          lastModified = 0;
-          await updatePreviewIfChanged();
-        };
-      } catch (err) {
-        console.error(err);
-        alert('フォルダの読み込みに失敗しました。');
-      }
-    });
-
-    // 外部エディタでの保存を検知するため、1秒ごとに更新日時を確認する。
-    setInterval(updatePreviewIfChanged, 1000);
-
-    // 情報モーダルを開閉する。背景部分のクリックでも閉じられる。
-    document.getElementById('info-button').onclick = () => {
-      document.getElementById('info-modal').style.display = 'block';
-    };
-    document.getElementById('info-close').onclick = () => {
-      document.getElementById('info-modal').style.display = 'none';
-    };
-    window.onclick = (e) => {
-      if (e.target === document.getElementById('info-modal')) {
-        document.getElementById('info-modal').style.display = 'none';
-      }
-    };
+    // ── 実行開始 ──
+    // deferで読み込むKaTeXも準備できてから起動する。
+    document.addEventListener('DOMContentLoaded', main.bind(null, document, window));
   </script>
 </body>
 </html>
