@@ -28,46 +28,6 @@
       background: transparent;
     }
 
-    /* アラートは本文の色を保ち、種類名・左罫線・薄い背景で区別する。 */
-    #preview .markdown-alert {
-      margin-block: 1em;
-      padding: 0.75em 1em;
-      border-inline-start: 0.25em solid var(--alert-color);
-      background-color: color-mix(in srgb, var(--alert-color) 6%, var(--color-background, white));
-    }
-    #preview .markdown-alert > .markdown-alert-title {
-      display: flex;
-      align-items: center;
-      gap: 0.5em;
-      margin-block: 0 0.5em;
-      color: var(--alert-color);
-      font-weight: bold;
-    }
-    #preview .markdown-alert-icon {
-      display: inline-flex;
-      align-items: center;
-      justify-content: center;
-      flex: 0 0 1.25em;
-      font-size: 1em;
-      line-height: 1.5;
-    }
-    #preview .markdown-alert > :last-child {
-      margin-block-end: 0;
-    }
-    #preview .markdown-alert-note      { --alert-color: #0969da; }
-    #preview .markdown-alert-tip       { --alert-color: #1a7f37; }
-    #preview .markdown-alert-important { --alert-color: #8250df; }
-    #preview .markdown-alert-warning   { --alert-color: #9a6700; }
-    #preview .markdown-alert-caution   { --alert-color: #cf222e; }
-    /* 印刷にはライト配色を使い、長いアラートの改ページを妨げない。 */
-    @media screen and (prefers-color-scheme: dark) {
-      #preview .markdown-alert-note      { --alert-color: #58a6ff; }
-      #preview .markdown-alert-tip       { --alert-color: #3fb950; }
-      #preview .markdown-alert-important { --alert-color: #a371f7; }
-      #preview .markdown-alert-warning   { --alert-color: #d29922; }
-      #preview .markdown-alert-caution   { --alert-color: #f85149; }
-    }
-
     /* 操作欄と情報モーダルのレイアウト */
     body {
       font-family: sans-serif;
