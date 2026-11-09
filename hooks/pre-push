@@ -1,0 +1,95 @@
+#!/bin/sh
+# Git for Windows付属のsh・grep・awkを使用する。追加ランタイムは不要。
+# インストール済みのこのファイルだけで動作し、現在のブランチには依存しない。
+
+failed=0
+html_path=Markdown_Preview.html
+
+# Gitが渡す「実際に送る参照とオブジェクト」を確認する。
+# push先でタグ名を変更する場合も、公開される側の名前を基準にする。
+while read -r local_ref local_oid remote_ref remote_oid
+do
+    case "$remote_ref" in
+        refs/tags/v*) tag=${remote_ref#refs/tags/} ;;
+        *) continue ;;
+    esac
+
+    # タグの削除には照合対象がない。
+    case "$local_oid" in
+        *[!0]*) ;;
+        *) continue ;;
+    esac
+
+    if ! printf '%s\n' "$tag" | LC_ALL=C grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+        printf 'pushを中止します。バージョンタグの形式が不正です: %s\n期待する形式: v数字.数字.数字\n\n' "$tag" >&2
+        failed=1
+        continue
+    fi
+
+    # ^{commit}で注釈付きタグもコミットに解決する。
+    # 作業フォルダやHEADではなく、そのタグ自身のHTMLを読む。
+    if ! html=$(git show "${local_oid}^{commit}:$html_path" 2>/dev/null); then
+        printf 'pushを中止します。タグ内のHTMLを読み取れません。\nタグ: %s\n対象ファイル: %s\n\n' "$tag" "$html_path" >&2
+        failed=1
+        continue
+    fi
+
+    # 現在のHTML構造に合わせ、info-modal内のツール名リンクを取得する。
+    # divの入れ子を数え、モーダル外の文字列は候補にしない。
+    # 表記を取得できない・複数ある・構造が変わった場合は安全側に倒して止める。
+    if ! version=$(printf '%s\n' "$html" | LC_ALL=C awk '
+        BEGIN { RS = "<" }
+        {
+            if ($0 ~ /^!--/) {
+                comment = 1
+            }
+            if (comment) {
+                if ($0 ~ /-->/) comment = 0
+                next
+            }
+
+            end = index($0, ">")
+            if (!end) next
+            element = substr($0, 1, end - 1)
+            text = substr($0, end + 1)
+
+            if (element ~ /^div([[:space:]]|$)/) {
+                if (element ~ /[[:space:]]id[[:space:]]*=[[:space:]]*["\047]info-modal["\047]([[:space:]]|$)/) {
+                    modals++
+                    if (depth) invalid = 1
+                    depth++
+                } else if (depth) {
+                    depth++
+                }
+            } else if (depth && element ~ /^\/div([[:space:]]|$)/) {
+                depth--
+            }
+
+            if (depth && element ~ /^a([[:space:]]|$)/ &&
+                text ~ /^[[:space:]]*Markdown_Preview([[:space:]]|\(|$)/) {
+                candidates++
+                if (text !~ /^[[:space:]]*Markdown_Preview\([^()]+\)[[:space:]]*$/) {
+                    invalid = 1
+                }
+                sub(/^[[:space:]]*Markdown_Preview\(/, "", text)
+                sub(/\)[[:space:]]*$/, "", text)
+                version = text
+            }
+        }
+        END {
+            if (modals != 1 || depth != 0 || candidates != 1 || invalid) exit 1
+            print version
+        }
+    '); then
+        printf 'pushを中止します。info内のバージョンを一意に取得できません。\nタグ: %s\n対象ファイル: %s\ninfo-modal内にMarkdown_Preview(v数字.数字.数字)のリンクが1つあるか確認してください。\n\n' "$tag" "$html_path" >&2
+        failed=1
+        continue
+    fi
+
+    if [ "$tag" != "$version" ]; then
+        printf 'pushを中止します。バージョンが一致しません。\nタグ: %s\nHTML内の表記: %s\n対象ファイル: %s\nHTMLを修正してコミットし、修正後のコミットに未公開のタグを付け直してください。\n\n' "$tag" "$version" "$html_path" >&2
+        failed=1
+    fi
+done
+
+exit "$failed"

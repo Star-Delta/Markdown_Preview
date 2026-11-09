@@ -1,0 +1,7 @@
+hooks/pre-push text eol=lf
+
+# 開発用ファイルはGitHubのソースコードZIP/tar.gzに含めない。
+/.gitattributes export-ignore
+/hooks export-ignore
+/tests export-ignore
+/バージョンチェック.md export-ignore
